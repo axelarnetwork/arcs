@@ -100,43 +100,43 @@ struct PageRequest {
 
 ```rust
 struct QueryResponse<T> {
-    data: Vec<T>,
-    pagination: PageResponse,
+	data: Vec<T>,
+	pagination: PageResponse,
 }
 
 struct PageResponse {
-    next_key: Option<Binary>,
-    total: u64,
+	next_key: Option<Binary>,
+	total: u64,
 }
 
 // Example Chain Response
 struct ChainData {
-    chain_endpoint: ChainEndpoint,
+	chain_endpoint: ChainEndpoint,
 	provers_config: Vec<ProverConfig>,
 	its_config: ITSChainConfig,
 }
 
 pub struct ChainEndpoint {
-    pub name: ChainName,
-    pub gateway: Gateway,
-    pub frozen_status: FlagSet<GatewayDirection>,
-    pub msg_id_format: MessageIdFormat,
+	pub name: ChainName,
+	pub gateway: Gateway,
+	pub frozen_status: FlagSet<GatewayDirection>,
+	pub msg_id_format: MessageIdFormat,
 }
 
 struct ProverConfig {
-    pub prover_address: ProverAddress,
-    pub active_verifiers: HashSet<VerifierAddress>,
+	pub prover_address: ProverAddress,
+	pub active_verifiers: HashSet<VerifierAddress>,
 }
 
 pub struct ITSChainConfig {
 	pub its_address: Address,
-    pub truncation: TruncationConfig,
-    frozen: bool,
+	pub truncation: TruncationConfig,
+	frozen: bool,
 }
 
 pub struct TruncationConfig {
-    pub max_uint: nonempty::Uint256,
-    pub max_decimals_when_truncating: u8,
+	pub max_uint: nonempty::Uint256,
+	pub max_decimals_when_truncating: u8,
 }
 
 ```
