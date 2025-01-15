@@ -97,7 +97,8 @@ struct PageRequest {
 
 
 #### Response Structure 
-```
+
+```rust
 struct QueryResponse<T> {
     data: Vec<T>,
     pagination: PageResponse,
@@ -111,7 +112,19 @@ struct PageResponse {
 // Example Chain Response
 struct ChainData {
     chain_endpoint: ChainEndpoint,
-    gateway: Gateway,
+	provers_info: Vec<ProverInfo>,
+}
+
+pub struct ChainEndpoint {
+    pub name: ChainName,
+    pub gateway: Gateway,
+    pub frozen_status: FlagSet<GatewayDirection>,
+    pub msg_id_format: MessageIdFormat,
+}
+
+struct ProverInfo {
+    address: ProverAddress,
+    active_verifiers: HashSet<VerifierAddress>,
 }
 
 ```
