@@ -112,7 +112,8 @@ struct PageResponse {
 // Example Chain Response
 struct ChainData {
     chain_endpoint: ChainEndpoint,
-	provers_info: Vec<ProverInfo>,
+	provers_config: Vec<ProverConfig>,
+	its_config: ITSChainConfig,
 }
 
 pub struct ChainEndpoint {
@@ -122,17 +123,24 @@ pub struct ChainEndpoint {
     pub msg_id_format: MessageIdFormat,
 }
 
-struct ProverInfo {
-    address: ProverAddress,
-    active_verifiers: HashSet<VerifierAddress>,
+struct ProverConfig {
+    pub prover_address: ProverAddress,
+    pub active_verifiers: HashSet<VerifierAddress>,
+}
+
+pub struct ITSChainConfig {
+	pub its_address: Address,
+    pub truncation: TruncationConfig,
+    frozen: bool,
+}
+
+pub struct TruncationConfig {
+    pub max_uint: nonempty::Uint256,
+    pub max_decimals_when_truncating: u8,
 }
 
 ```
 
-### List of Required Information in the Response
-1. TODO...
-
-  
 
 ## Risks and Mitigations
 
@@ -155,3 +163,4 @@ struct ProverInfo {
 | Date | Revision | Author | Description |
 |------|-----------|---------|-------------|
 | 2024-01-14 | v1.0 | Houmaan Chamani | Initial ARC draft |
+| 2024-01-15 | v1.1 | Houmaan Chamani | Add details to response structure |
