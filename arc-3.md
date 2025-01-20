@@ -1,5 +1,5 @@
 
-# ARC-3: Chain Info Endpoint For Coordinator
+# ARC-3: Chain Info Endpoints For Coordinator
 
   
 
@@ -153,9 +153,9 @@ pub struct TruncationConfig {
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|---------|------------|------------|
-| Query Performance | High | Medium | TODO! |
-| Response Size | Medium | High | Enforce pagination, compress responses |
-| Filter Complexity | Medium | Low | Limit filter depth, validate inputs |
+| Query Performance | High | Medium | Push-based state update |
+| Response Size | Medium | High | Enforce pagination, page size |
+| Filter Complexity | Medium | Low | Pre-defined filter options |
 
 ### Detailed Risk Analysis
 
