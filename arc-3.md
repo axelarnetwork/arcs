@@ -215,79 +215,79 @@ type GatewayAddress = Addr;
 type VerifierAddress = Addr;
 
 pub struct ChainContractsRecord {
-    pub chain_name: ChainName,
-    pub prover_address: ProverAddress,
-    pub gateway_address: GatewayAddress,
-    pub verifier_address: VerifierAddress,
+  pub chain_name: ChainName,
+  pub prover_address: ProverAddress,
+  pub gateway_address: GatewayAddress,
+  pub verifier_address: VerifierAddress,
 }
 
 pub struct ChainContractsIndexes<'a> {
-    pub by_prover: UniqueIndex<'a, ProverAddress, ChainContractsRecord, ChainName>,
-    pub by_gateway: UniqueIndex<'a, GatewayAddress, ChainContractsRecord, ChainName>,
-    pub by_verifier: UniqueIndex<'a, VerifierAddress, ChainContractsRecord, ChainName>,
+  pub by_prover: UniqueIndex<'a, ProverAddress, ChainContractsRecord, ChainName>,
+  pub by_gateway: UniqueIndex<'a, GatewayAddress, ChainContractsRecord, ChainName>,
+  pub by_verifier: UniqueIndex<'a, VerifierAddress, ChainContractsRecord, ChainName>,
 }
 
 const CHAIN_CONTRACTS_MAP: IndexedMap<ChainName, ChainContractsRecord, ChainContractsIndexes> =
-    IndexedMap::new(
-        "chain_contracts_map",
-        ChainContractsIndexes {
-            by_prover: UniqueIndex::new(|r| r.prover_address.clone(), "chain_contracts_by_prover"),
-            by_gateway: UniqueIndex::new(|r| r.gateway_address.clone(), "chain_contracts_by_gateway"),
-            by_verifier: UniqueIndex::new(|r| r.verifier_address.clone(), "chain_contracts_by_verifier"),
-        },
-    );
+  IndexedMap::new(
+    "chain_contracts_map",
+    ChainContractsIndexes {
+      by_prover: UniqueIndex::new(|r| r.prover_address.clone(), "chain_contracts_by_prover"),
+      by_gateway: UniqueIndex::new(|r| r.gateway_address.clone(), "chain_contracts_by_gateway"),
+      by_verifier: UniqueIndex::new(|r| r.verifier_address.clone(), "chain_contracts_by_verifier"),
+    },
+  );
 
 
 pub fn save_chain_contracts(
-    storage: &mut dyn Storage,
-    record: ChainContractsRecord,
+  storage: &mut dyn Storage,
+  record: ChainContractsRecord,
 ) -> Result<(), ContractError> {
-    CHAIN_CONTRACTS_MAP.save(storage, record.chain_name.clone(), &record)
+  CHAIN_CONTRACTS_MAP.save(storage, record.chain_name.clone(), &record)
 }
 
 pub fn get_contracts_by_chain(
-    storage: &dyn Storage,
-    chain_name: ChainName,
+  storage: &dyn Storage,
+  chain_name: ChainName,
 ) -> Result<ChainContractsRecord, ContractError> {
-    CHAIN_CONTRACTS_MAP
-        .may_load(storage, chain_name)?
-        .ok_or(ContractError::ChainNotRegistered)
+  CHAIN_CONTRACTS_MAP
+    .may_load(storage, chain_name)?
+    .ok_or(ContractError::ChainNotRegistered)
 }
 
 pub fn get_contracts_by_prover(
-    storage: &dyn Storage,
-    prover_address: Address,
+  storage: &dyn Storage,
+  prover_address: Address,
 ) -> Result<ChainContractsRecord, ContractError> {
-    CHAIN_CONTRACTS_MAP
-        .idx
-        .by_prover
-        .item(storage, prover_address)?
-        .map(|(_, record)| record)
-        .ok_or(ContractError::ProverNotRegistered)
+  CHAIN_CONTRACTS_MAP
+    .idx
+    .by_prover
+    .item(storage, prover_address)?
+    .map(|(_, record)| record)
+    .ok_or(ContractError::ProverNotRegistered)
 }
 
 pub fn get_contracts_by_gateway(
-    storage: &dyn Storage,
-    gateway_address: Address,
+  storage: &dyn Storage,
+  gateway_address: Address,
 ) -> Result<ChainContractsRecord, ContractError> {
-    CHAIN_CONTRACTS_MAP
-        .idx
-        .by_gateway
-        .item(storage, gateway_address)?
-        .map(|(_, record)| record)
-        .ok_or(ContractError::GatewayNotRegistered)
+  CHAIN_CONTRACTS_MAP
+    .idx
+    .by_gateway
+    .item(storage, gateway_address)?
+    .map(|(_, record)| record)
+    .ok_or(ContractError::GatewayNotRegistered)
 }
 
 pub fn get_contracts_by_verifier(
-    storage: &dyn Storage,
-    verifier_address: Address,
+  storage: &dyn Storage,
+  verifier_address: Address,
 ) -> Result<ChainContractsRecord, ContractError> {
-    CHAIN_CONTRACTS_MAP
-        .idx
-        .by_verifier
-        .item(storage, verifier_address)?
-        .map(|(_, record)| record)
-        .ok_or(ContractError::VerifierNotRegistered)
+  CHAIN_CONTRACTS_MAP
+    .idx
+    .by_verifier
+    .item(storage, verifier_address)?
+    .map(|(_, record)| record)
+    .ok_or(ContractError::VerifierNotRegistered)
 }
 ```
 
