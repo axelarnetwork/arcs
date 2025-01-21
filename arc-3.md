@@ -207,7 +207,7 @@ assert!(response.is_ok());
 ```
 
 #### Coordinator `state.rs`
-A new strucut called `ChainContractsRecord` needs to be added to save contract addresses. To accomodate lookup by using either of the properties, the existing `CHAIN_PROVER_INDEXED_MAP` needs to be updated as well:
+A new struct called `ChainContractsRecord` needs to be added to save contract addresses. To accomodate lookup by using either of the properties, the existing `CHAIN_PROVER_INDEXED_MAP` needs to be updated as well:
 
 ```rust
 type ProverAddress = Addr;
