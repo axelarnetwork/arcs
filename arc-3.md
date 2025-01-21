@@ -76,13 +76,12 @@ No additional query requirements were identified from other engineering teams at
 
 ## Detailed Design
 
-  
 
 ### Overview
 The proposed system introduces six standardized query structures.
   
 
-### Technical Specification
+### Query Messages Specification
 
 #### Interchain-Token-Service
 
@@ -172,6 +171,126 @@ pub enum QueryMsg {
     // existing queries
 }
 ```
+
+
+
+### Execute Message Specification
+
+#### Coordinator `msg.rs`
+Replace existing `RegisterProverContract` execute message with:
+
+```rust
+#[permission(Governance)]
+RegisterContractAddresses {
+    chain_name: ChainName,
+    prover_address: String,
+    gateway_address: String,
+    verifier_address: String
+}
+```
+
+#### Example execute call
+This new endpoint should be called by governance:
+
+```rust
+let response = coordinator_contract.execute(
+    &app,
+    governance_of_coordinator_contract.clone(),
+    &CoordinatorExecuteMsg::RegisterContractAddresses {
+        chain_name: chain_name.clone(),
+        gateway_address: gateway.contract_addr.to_string(),
+        prover_address: multisig_prover.contract_addr.to_string(),
+        verifier_address: voting_verifier.contract_addr.to_string(),
+    },
+);
+assert!(response.is_ok());
+```
+
+#### Coordinator `state.rs`
+A new strucut called `ChainContractsRecord` needs to be added to save contract addresses. To accomodate lookup by using either of the properties, the existing `CHAIN_PROVER_INDEXED_MAP` needs to be updated as well:
+
+```rust
+type ProverAddress = Addr;
+type GatewayAddress = Addr;
+type VerifierAddress = Addr;
+
+pub struct ChainContractsRecord {
+    pub chain_name: ChainName,
+    pub prover_address: ProverAddress,
+    pub gateway_address: GatewayAddress,
+    pub verifier_address: VerifierAddress,
+}
+
+pub struct ChainContractsIndexes<'a> {
+    pub by_prover: UniqueIndex<'a, ProverAddress, ChainContractsRecord, ChainName>,
+    pub by_gateway: UniqueIndex<'a, GatewayAddress, ChainContractsRecord, ChainName>,
+    pub by_verifier: UniqueIndex<'a, VerifierAddress, ChainContractsRecord, ChainName>,
+}
+
+const CHAIN_CONTRACTS_MAP: IndexedMap<ChainName, ChainContractsRecord, ChainContractsIndexes> =
+    IndexedMap::new(
+        "chain_contracts_map",
+        ChainContractsIndexes {
+            by_prover: UniqueIndex::new(|r| r.prover_address.clone(), "chain_contracts_by_prover"),
+            by_gateway: UniqueIndex::new(|r| r.gateway_address.clone(), "chain_contracts_by_gateway"),
+            by_verifier: UniqueIndex::new(|r| r.verifier_address.clone(), "chain_contracts_by_verifier"),
+        },
+    );
+
+
+pub fn save_chain_contracts(
+    storage: &mut dyn Storage,
+    record: ChainContractsRecord,
+) -> Result<(), ContractError> {
+    CHAIN_CONTRACTS_MAP.save(storage, record.chain_name.clone(), &record)
+}
+
+pub fn get_contracts_by_chain(
+    storage: &dyn Storage,
+    chain_name: ChainName,
+) -> Result<ChainContractsRecord, ContractError> {
+    CHAIN_CONTRACTS_MAP
+        .may_load(storage, chain_name)?
+        .ok_or(ContractError::ChainNotRegistered)
+}
+
+pub fn get_contracts_by_prover(
+    storage: &dyn Storage,
+    prover_address: Address,
+) -> Result<ChainContractsRecord, ContractError> {
+    CHAIN_CONTRACTS_MAP
+        .idx
+        .by_prover
+        .item(storage, prover_address)?
+        .map(|(_, record)| record)
+        .ok_or(ContractError::ProverNotRegistered)
+}
+
+pub fn get_contracts_by_gateway(
+    storage: &dyn Storage,
+    gateway_address: Address,
+) -> Result<ChainContractsRecord, ContractError> {
+    CHAIN_CONTRACTS_MAP
+        .idx
+        .by_gateway
+        .item(storage, gateway_address)?
+        .map(|(_, record)| record)
+        .ok_or(ContractError::GatewayNotRegistered)
+}
+
+pub fn get_contracts_by_verifier(
+    storage: &dyn Storage,
+    verifier_address: Address,
+) -> Result<ChainContractsRecord, ContractError> {
+    CHAIN_CONTRACTS_MAP
+        .idx
+        .by_verifier
+        .item(storage, verifier_address)?
+        .map(|(_, record)| record)
+        .ok_or(ContractError::VerifierNotRegistered)
+}
+```
+
 
 
 
