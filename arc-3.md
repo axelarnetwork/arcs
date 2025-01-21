@@ -1,5 +1,5 @@
 
-# ARC-3: Chain Info Endpoints For Coordinator
+# ARC-3: Query System Design for Amplifier State
 
   
 
@@ -15,7 +15,7 @@
 
 -  **Created**: 2025-01-14
 
--  **Last Updated**: 2025-01-17
+-  **Last Updated**: 2025-01-21
 
 -  **Target Implementation**: Q1 2025
 
@@ -23,61 +23,103 @@
 
 ## Summary
 
-This ARC proposes a standardized query system for retrieving chain data from the Coordinator contract. It introduces two main query endpoints: one for retrieving filtered lists of chain endpoints with pagination support, and another for accessing detailed chain configurations including its prover and ITS (Interchain Token Service) settings. This design is aimed at increasing the maintainability of the system by providing aggregated data rather than having multiple specific query messages for each need.
+This ARC defines the requirements and design for query interfaces across the Amplifier contracts. It aims to identify all necessary queries required by engineering teams, determine the appropriate contract for each query, and define their specific interfaces. The goal is to clearly define the new responsiblities of each contract and ensure all necessary state information is accessible through maintainable query endpoints.
 
-  
 
 ## Motivation
 
   
 
 ### Background
-The way most amplifier query endpoints have been treated so far required individual messages for each use case. This led to: 
-- Overhead of maintaining numerous specific endpoints. This is because small changes in design or the code might require multiple endpoints and the their logical paths to be updated.
-- Potential performance issues with multiple separate queries, where a client has to send multiple requests to get what they want
-- Limited query reusability. Each data request requires a specific query that returns only narrowly-defined information, making these queries difficult to repurpose for other use cases.
+
+Amplifier requires various components to expose their state through query interfaces. Currently, there is no standardized approach to designing these queries, leading to several challenges:
+- Missing queries for newly added contracts such as ITS
+- Lack of clear visibility into which contract owns and should expose specific state data
+- Uncertainty about what queries are needed by different engineering teams and clients
 
   
 
 ### Goals
-- Simplify the query interface by consolidating related queries into unified endpoints 
-- Provide filtering capabilities to handle various use cases 
-- Implement efficient pagination to manage large result sets 
-- Shift data extraction to client-side for specific needs 
-- Reduce the need for frequent message modifications
-
+- Document comprehensive query requirements from all engineering teams
+- Establish clear ownership of state data and corresponding queries in appropriate contracts
+- Design consistent interfaces for common query patterns (filtering, pagination)
+- Ensure efficient access to necessary state data with minimal query complexity
+- Create maintainable query endpoints that respect contract boundaries
   
+
+
+
+## Requirements
+
+### Chain-Ops
+- Interchain-Token-Service:
+    - Extend `ItsContract` query to include truncation configuration
+    - Add contract status information (`Disabled` or `Enabled`)
+    - Retrieve list of frozen chains (chains affected by `FreezeChain`)
+    - Retrieve list of active chains (unfrozen)
+- Router:
+    - Get the paginated list of chains with filter for frozen status and direction
+
+
+### Axelarons
+- Implement a unified lookup query that accepts any one of these identifiers and returns the complete set of associated addresses:
+    - Chain name
+    - Gateway address
+    - Voting verifier address
+    - Multisig prover address
+
+
+No additional query requirements were identified from other engineering teams at this time.
+
+
+
 
 ## Detailed Design
 
   
 
 ### Overview
-The proposed system introduces two standardized query structures.
-
+The proposed system introduces six standardized query structures.
   
 
 ### Technical Specification
-#### Query Structure 
+
+#### Interchain-Token-Service
 
 ```rust
-pub enum QueryMsg {
-    // Get chains filtered by frozen status, with pagination
-    GetChains {
-        frozen_filter: Option<FrozenFilter>,
-        pagination: Option<PageConfig>,
-    },
-
-    // Get detailed chain info by identifier
-    GetChainInfo {
-        identifier: ChainIdentifier,
-    }
+pub struct ChainConfig {
+    pub chain: ChainNameRaw,
+    pub its_edge_contract: Address,
+    pub truncation: TruncationConfig,
 }
 
-// Chain identifier can be either name or gateway address
-enum ChainIdentifier {
-    ByChainName: ChainName, 
-	ByGatewayAddress: Addr,
+
+pub enum QueryMsg {
+
+    #[returns(Option<ChainConfig>)]
+    ChainInfo { chain: ChainNameRaw },
+
+    #[returns(Vec<ChainNameRaw>)]
+    AllFrozenChains,
+
+     #[returns(Vec<ChainNameRaw>)]
+    AllActiveChains,
+
+    #[returns(bool)]
+    IsEnabled,
+
+    // existing queries
+}
+```
+
+
+#### Router
+```rust
+pub struct ChainEndpoint {
+	pub name: ChainName,
+	pub gateway: Gateway,
+	pub frozen_status: FlagSet<GatewayDirection>,
+	pub msg_id_format: MessageIdFormat,
 }
 
 // Filter with predefined options
@@ -88,64 +130,48 @@ enum FrozenFilter {
     NotFrozen,
 }
 
-// Pagination
-struct PageConfig {
-    // Start after this key (None for first page)
-    start_after: Option<String>,  
+pub enum QueryMsg {
 
-    // Maximum items per page
-    limit: u32,
+    // Returns a filtered (optional) list of chains registered with the router
+    #[returns(Vec<ChainEndpoint>)]
+    Chains {
+        frozen_filter: Option<FrozenFilter>,
+        start_after: Option<ChainName>,
+        limit: Option<u32>,
+    },
+
+    // existing queries
 }
 ```
 
 
-
-#### Response Structure and Example
+#### Coordinator
 
 ```rust
-pub struct ChainListResponse {
-    chains: Vec<ChainEndpoint>,
-    pagination: PageInfo,
+pub struct ContractDiscoveryResponse {
+    chain_name: ChainName,
+    gateway_address: Address,
+    verifier_address: Address,
+    prover_address: Address,
 }
 
-pub struct PageInfo {
-    // Key to use for next page query (None if no more pages)
-    next_key: Option<String>,
-    total: u64,
+pub enum ContractIdentifier {
+    ChainName(ChainName),
+    GatewayAddress(Address),
+    VerifierAddress(Address),
+    ProverAddress(Address),
 }
 
-// Detailed chain info response
-pub struct ChainInfoResponse {
-    chain_endpoint: ChainEndpoint,
-    provers_config: Vec<ProverConfig>,
-    its_config: ITSChainConfig,
-}
+pub enum QueryMsg {
 
-pub struct ChainEndpoint {
-	pub name: ChainName,
-	pub gateway: Gateway,
-	pub frozen_status: FlagSet<GatewayDirection>,
-	pub msg_id_format: MessageIdFormat,
-}
+    #[returns(ContractDiscoveryResponse)]
+    ContractDiscovery {
+        identifier: ContractIdentifier,
+    },
 
-struct ProverConfig {
-	pub prover_address: ProverAddress,
-	pub active_verifiers: HashSet<VerifierAddress>,
+    // existing queries
 }
-
-pub struct ITSChainConfig {
-	pub its_address: Address,
-	pub truncation: TruncationConfig,
-	frozen: bool,
-}
-
-pub struct TruncationConfig {
-	pub max_uint: nonempty::Uint256,
-	pub max_decimals_when_truncating: u8,
-}
-
 ```
-
 
 
 
@@ -153,32 +179,20 @@ pub struct TruncationConfig {
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|---------|------------|------------|
-| Query Performance | High | Medium | Push-based state update |
-| Response Size | Medium | High | Enforce pagination, page size |
-| Filter Complexity | Medium | Low | Pre-defined filter options |
+| Router Query: Response Size | Medium | High | Enforce pagination, page size |
+| Router Query: Filter Complexity | Medium | Low | Pre-defined filter options |
 
 ### Detailed Risk Analysis
 
-#### Query Performance
-**Risk**: The coordinator contract needs to aggregate data from multiple sources to fulfill queries, which could lead to poor performance if data needs to be collected (pullled) during query execution.
-
-**Mitigation**: 
-- Implement a push-based state update system where contracts update their state in the coordinator
-- Each contract pushes relevant state changes to the coordinator when they occur
-- Coordinator maintains an up-to-date cache of all required data in its state
-- Queries can be served directly from coordinator state without cross-contract communication
-
-#### Response Size
+#### Router Query: Response Size
 **Risk**: Query responses may contain large data depending on filter criteria. This could potentially cause gas issues or timeout problems.
 
 **Mitigation**:
-- Implement cursor-based pagination using the response's `next_key` field
+- Implement pagination using the `start_after` field
 - Set mandatory page size limits (e.g., maximum 50 items per page)
-- Allow clients to specify smaller page sizes if needed
-- Include total count in response to help clients plan pagination strategy
 
 
-#### Filter Complexity
+#### Router Query: Filter Complexity
 **Risk**: Complex or arbitrary filter conditions could lead to implementation difficulties and potential performance issues.
 
 **Mitigation**:
@@ -201,3 +215,4 @@ pub struct TruncationConfig {
 | 2024-01-14 | v1.0 | Houmaan Chamani | Initial ARC draft |
 | 2024-01-15 | v1.1 | Houmaan Chamani | Add details to response structure |
 | 2024-01-17 | v1.2 | Houmaan Chamani | Risk analysis and endpoint definition refinement |
+| 2024-01-21 | v1.3 | Houmaan Chamani | Reformat the arc and break down queries for each contract |
