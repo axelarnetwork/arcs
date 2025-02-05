@@ -53,6 +53,43 @@ Setting this incorrectly however can be lead to the ITS hub recording the deploy
 
 One potential mitigation is to allow the deployer to resubmit the msg but with a different destination decimals, and have ITS hub overwrite the recorded deployment. ITS Hub can allow this overwrite until the first Transfer msg is encountered to allow the user to fix their deployment. This adds some more complexity in ITS hub setup.
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Chain A ITS Factory
+    participant IA as Chain A ITS
+    participant H as ITS Hub
+    participant IB as Chain B ITS
+    %% participant B as Chain B ITS Factory
+
+    %% === Deploy & Register Tokens on Both Chains ===
+    U->>IA: registerTokenMetadata (Token A)
+    IA->>H: registerTokenMetadata ITS msg
+
+    U->>IB: registerTokenMetadata (Token B)
+    IB->>H: registerTokenMetadata ITS msg
+
+    %% === Link Tokens Cross-Chain ===
+    U->>A: registerCustomToken (Token A)
+    A->>IA: registerCustomToken
+    IA->>IA: TokenManager deployed
+
+    U->>A: linkToken (Chain B, Token B, salt)
+    A->>IA: linkToken
+    IA->>H: LinkToken ITS msg
+    H->>IB: LinkToken ITS msg
+    IB->>IB: TokenManager deployed
+
+    %% === Transfer Mintership on Both Chains ===
+    U->>U: Grant minter role to TokenManager for Token A
+    U->>U: Grant minter role to TokenManager for Token B
+
+    %% === Interchain Transfer (Both Ways) ===
+    U->>IA: interchainTransfer (Chain B, tokenId, recipient, amount)
+    IA->>H: interchainTransfer ITS msg
+    H->>IB: interchainTransfer ITS msg
+```
+
 Flow:
 
 1. Deployer submits `DeployTokenManager`
