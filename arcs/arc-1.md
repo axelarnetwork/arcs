@@ -53,6 +53,14 @@ Setting this incorrectly however can be lead to the ITS hub recording the deploy
 
 One potential mitigation is to allow the deployer to resubmit the msg but with a different destination decimals, and have ITS hub overwrite the recorded deployment. ITS Hub can allow this overwrite until the first Transfer msg is encountered to allow the user to fix their deployment. This adds some more complexity in ITS hub setup.
 
+Flow:
+
+1. Deployer submits `DeployTokenManager`
+2. ITS Hub calculates scaling factor and records deployment
+3. Destination chain deploys token manager with the corresponding token address (extracted from the params)
+
+#### Solution 2: Token Registration and Linking
+
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -89,14 +97,6 @@ sequenceDiagram
     IA->>H: interchainTransfer ITS msg
     H->>IB: interchainTransfer ITS msg
 ```
-
-Flow:
-
-1. Deployer submits `DeployTokenManager`
-2. ITS Hub calculates scaling factor and records deployment
-3. Destination chain deploys token manager with the corresponding token address (extracted from the params)
-
-#### Solution 2: Token Registration and Linking
 
 Two new ITS message types are introduced: `RegisterToken` and `LinkToken`.
 
