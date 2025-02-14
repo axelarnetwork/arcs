@@ -4,10 +4,11 @@
 
 - **ARC ID**: 1
 - **Author(s)**: Milap Sheth
-- **Status**: Draft
+- **Status**: Final
 - **Created**: 2024-11-14
-- **Last Updated**: 2024-11-14
-- **Target Implementation**: Q4 2024
+- **Last Updated**: 2025-02-14
+- **Target Implementation**: Q1 2025
+- **Deployment Status**: Live
 
 ## Summary
 
@@ -17,49 +18,75 @@ Extend the Interchain Token Service (ITS) Hub to support linking existing tokens
 
 ### Background
 
-The current ITS `DeployTokenManager` message type only supports linking existing tokens with identical decimals. This limitation is particularly problematic when dealing with non-EVM chains, which often cannot support the high decimal values (e.g., 18) common in EVM chains due to token amount type constraints.
+The current EVM ITS implementation supports linking existing tokens across multiple chains with identical decimals, i.e. two existing ERC20 tokens can be linked together by sending a `DeployTokenManager` msg, and giving the token manager the minter role for the token. This allows the tokens to be transferred 1:1 across chains without the need for a wrapped intermediary token or swap.
+
+To support linking tokens with other Amplifier chains via ITS Hub, ITS Hub needs to support linking tokens with different decimals. The existing `DeployTokenManager` msg type doesn't include enough information for ITS Hub to support this.
 
 ### Goals
 
 - Enable linking of existing tokens across connected chains
 - Support linking tokens with different decimal precisions
 
-## Detailed Design
+## Design
 
-### Overview
+To allow ITS Hub to support linking tokens with different decimals, it needs to know the token decimals for both the source and destination chains.
 
-Two potential solutions are proposed to implement this enhancement:
-
-1. Modify the existing `DeployTokenManager` message type
-2. Introduce new message types for token registration and linking
-
-### Technical Specification
-
-#### Solution 1: Enhanced DeployTokenManager
+To support this, two new ITS message types are introduced: `RegisterTokenMetadata` and `LinkToken`.
 
 ```solidity
-struct DeployTokenManager {
+struct RegisterTokenMetadata {
+    bytes tokenAddress;
+    uint8 decimals;
+}
+
+struct LinkToken {
     bytes32 tokenId;
     uint256 tokenManagerType;
+    bytes sourceToken;
+    bytes destinationToken;
     bytes params;
-    uint8 sourceDecimals;
-    uint8 destinationDecimals;
 }
 ```
 
-ITS Hub can use the source and destination token decimals to determine the appropriate scaling factor to apply when intercepting this message. ITS edge contract can populate the source token decimals by reading the token metadata, however the destination token decimals will need to be provided by the deployer.
+New entrypoints in the ITS Edge contract:
 
-Setting this incorrectly however can be lead to the ITS hub recording the deployment incorrectly, while the deployment tx on the destination ITS will fail due to mismatching decimals, which isn’t recoverable.
+```solidity
+function registerTokenMetadata(address token);
 
-One potential mitigation is to allow the deployer to resubmit the msg but with a different destination decimals, and have ITS hub overwrite the recorded deployment. ITS Hub can allow this overwrite until the first Transfer msg is encountered to allow the user to fix their deployment. This adds some more complexity in ITS hub setup.
+// Derives the tokenId for a linked token
+function linkedTokenId(address deployer, bytes32 salt) external view returns (bytes32 tokenId);
+
+// Registers an existing token on the source chain
+function registerCustomToken(
+    bytes32 salt,
+    address tokenAddress,
+    TokenManagerType tokenManagerType,
+    address operator
+) external payable returns (bytes32 tokenId);
+
+// Links an existing registered token on the source chain to a token on the destination chain
+function linkToken(
+    bytes32 salt,
+    string calldata destinationChain,
+    bytes calldata destinationTokenAddress,
+    TokenManagerType tokenManagerType,
+    bytes calldata linkParams,
+    uint256 gasValue
+) external payable returns (bytes32 tokenId);
+```
 
 Flow:
 
-1. Deployer submits `DeployTokenManager`
-2. ITS Hub calculates scaling factor and records deployment
-3. Destination chain deploys token manager with the corresponding token address (extracted from the params)
+Setup: The user controls token A and token B on two different chains.
 
-#### Solution 2: Token Registration and Linking
+1. User calls `registerTokenMetadata` on ITS Chain A to submit a `RegisterTokenMetadata` msg type to ITS Hub to register token data in ITS hub.
+2. ITS Hub processes the `RegisterTokenMetadata` msg and stores the mapping of token address to decimals.
+3. User does the same on ITS Chain B.
+4. User calls `registerCustomToken` on ITS Chain A to register the token on the source chain. A token manager is deployed on the source chain corresponding to the `tokenId`.
+5. User then calls `linkToken` on ITS Chain A with the destination token address for Chain B. This submits a `LinkToken` msg type to ITS Hub.
+6. ITS Hub intercepts the `LinkToken` msg. It reads the decimals for each token address from it’s storage to calculate the scaling factor and creates the TokenInstance. If a token address isn’t registered in ITS Hub, it fails.
+7. ITS Chain B receives the `LinkToken` msg. It deploys the corresponding token manager for the token to set it up.
+8. ITS Hub can now receive `InterchainTransfer` msgs for this `tokenId`.
 
 ```mermaid
 sequenceDiagram
@@ -98,49 +125,23 @@ sequenceDiagram
     H->>IB: interchainTransfer ITS msg
 ```
 
-Two new ITS message types are introduced: `RegisterToken` and `LinkToken`.
+#### Alternative Solution: Enhanced DeployTokenManager msg
+
+An alternative solution is to modify the existing `DeployTokenManager` msg type to include the source and destination token decimals. While this solution was not chosen, it is included for completeness.
 
 ```solidity
-struct RegisterToken {
-    bytes tokenAddress;
-    uint8 decimals;
-}
-
-struct LinkToken {
+struct DeployTokenManager {
     bytes32 tokenId;
     uint256 tokenManagerType;
-    bytes sourceToken;
-    bytes destinationToken;
     bytes params;
+    uint8 sourceDecimals;
+    uint8 destinationDecimals;
 }
 ```
 
-New entrypoints in ITS Edge contract:
+ITS Hub can use the source and destination token decimals to determine the appropriate scaling factor to apply when intercepting this message. ITS edge contract can populate the source token decimals by reading the token metadata, however the destination token decimals will need to be provided by the deployer. This approach is easier to use for developers, since no additional metadata needs to be registered from each remote chain.
 
-- `registerToken(address token)`
-- `linkToken(bytes32 tokenId, uint256 tokenManagerType, bytes destinationToken, bytes params)`
-
-Flow:
-
-1. User calls `registerToken` on ITS Chain A to submit a `RegisterToken` msg type to ITS Hub to register token data in ITS hub.
-2. ITS Hub processes the `RegisterToken` msg and stores the mapping of token address to decimals.
-3. User does the same on ITS Chain B.
-4. User calls `linkToken` on ITS Chain A with the destination token address for Chain B. This submits a `LinkToken` msg type to ITS Hub.
-5. ITS Hub intercepts the `LinkToken` msg. It reads the decimals for each token address from it’s storage to calculate the scaling factor and creates the TokenInstance. If a token address isn’t registered in ITS Hub, it fails.
-6. ITS Chain B receives the `LinkToken` msg. It deploys the corresponding token manager for the token to set it up.
-7. ITS Hub can now receive Transfer msgs for this `tokenId`.
-
-## Risks and Mitigations
-
-| Risk | Impact | Likelihood | Mitigation |
-|------|---------|------------|------------|
-| Solution 1: Incorrect decimal configuration | High | Medium | ITS hub recovery mechanism |
-
-## Risks
-
-- Solution 1 is simpler to implement and thus rollout. But it is error prone and recovery in the event of an error is more complicated
-- Solution 2 introduces an additional step, but is more robust against errors
-- There is also the option to not support scaling altogether, but this reduces the power of ITS on non EVM chains with different token standards.
+However, setting this incorrectly can be lead to the ITS hub recording the deployment incorrectly, while the deployment tx on the destination ITS will fail due to mismatching decimals, which isn’t recoverable. Since this is more error prone, this solution isn't recommended.
 
 ### References
 
@@ -151,3 +152,4 @@ Flow:
 | Date | Revision | Author | Description |
 |------|-----------|---------|-------------|
 | 2024-11-14 | v1.0 | Milap Sheth | Initial ARC draft |
+| 2025-02-14 | v1.1 | Milap Sheth | Finalized ARC-1 |
