@@ -263,6 +263,3 @@ Description: Sets a new timestamp for the timelock with the given hash.
 ```
 fn set_time_lock_eta(&self, env: &Env, hash: BytesN<32>, eta: u64);
 ```
-
-
-
