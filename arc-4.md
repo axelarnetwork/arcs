@@ -1,10 +1,10 @@
 
-# ARC-4: ITS Hub Express
+# ARC-5: ITS Hub Express
 ## Metadata
 
   
 
--  **ARC ID**: 4
+-  **ARC ID**: 5
 
 -  **Author(s)**: CJ Cobb
 
@@ -12,7 +12,7 @@
 
 -  **Created**: 2025-03-20
 
--  **Last Updated**: 2025-03-20
+-  **Last Updated**: 2025-03-28
 
 -  **Target Implementation**: Q2 2025
 
@@ -35,7 +35,7 @@ chain to the hub. This is typically much slower than the second hop, since fully
 waiting for finality. Expressing to the hub also simplifies operational overhead for express relayers, since the
 relayers only need to maintain token balances on one chain (Axelarnet), instead of many destination chains.
 
-### Flow
+#### Architecture
 
 ```mermaid
 flowchart LR
@@ -63,25 +63,68 @@ flowchart LR
     Hub --refund original tokens--> ExpressRelayer
 ```
 
-TODO: deployment flow
+#### Sequence
+```mermaid
+sequenceDiagram
 
-TODO: sequence diagram
+participant User
+participant ITSEdge as ITS Edge Contract
+participant GasService as Gas Service
+participant Gateway
+participant Express as Express Relayer
+participant GMPRelayer as GMP Relayer
+participant Amplifier
+participant ITSHub as ITS Hub
 
-### Considerations
+User ->> ITSEdge: Interchain transfer with express
+ITSEdge ->> Gateway: call contract
+ITSEdge ->> GasService: pay express gas
+GasService ->> Express: emit express gas paid
+Gateway ->> GMPRelayer: emit call contract event
+Express ->> ITSHub: express execute (with tokens)
+ITSHub ->> Amplifier: send tokens to destination via call contract
+GMPRelayer ->> Amplifier: verify msg
+Amplifier ->> ITSHub: execute
+ITSHub ->> ExpressRelayer: refund tokens
+```
 
-Express execution of arbitrary contract calls is not universally safe, and usually apps opt in to express execution
-of calldata via defining a particular endpoint on their contract. However, when we express to ITS hub instead of to
-the receiving app, apps cannot opt in or out of call execution in the normal way. We need to design a way to allow
-apps to opt in.
+### API
+ITS Hub will expose a new executable message, `ExpressExecute` that faciliates express execution:
+```rust
+enum ExecuteMsg {
+    Execute(AxelarExecutableMessage),
+    
+    ExpressExecute(AxelarExecutableMessage),
+}
+```
+The express relayer should attach funds to this message, and the hub will store the relayer address for refunding later. Then the hub will create the second GMP call to send the funds to the destination.
+When the verified message arrives later and is executed via `Execute`, the hub will refund the relayer and not initiate a second GMP call to the destination.
+The call will error if the relayer does not provide enough funds or the right denom, if the call is not an interchain transfer, or if the call contains attached data and the app has not whitelisted itself to receive data (see Passing Data below)
 
-Two options:
-* Maintain a whitelist in ITS hub, which can be updated by governance.
-* Set a flag in the ITS packet sent to the receiving app signaling whether the call was expressed. Apps can choose
-to ignore expressed calls.
+### Token Minting
+To loan tokens for the express calls, the express relayer needs to maintain a balance of the token on Axelar. None of these tokens exist on Axelar today. To enable this, ITS Edge contracts will be developed in cosmwasm and deployed on Axelar, to enable users to deploy their token to Axelar itself, and send the express relayer some amount
+of funds to begin relaying.
 
-The second approach requires changing the ITS packet format, which would require upgrading existing ITS edge
-contracts, and would be an additional requirement for integrators. (would this also break existing ITS apps?).
+Question: should these tokens just be minted as Cosmos SDK coins, or should we use something smart contract based, like [cw 20](https://github.com/CosmWasm/cw-plus/blob/main/packages/cw20/README.md)? 
 
+### Passing Data
+ITS allows callers to attach arbitrary data to a transfer, which can be used to execute additional logic when the transfer is received. Expressing transfers with arbitrary data attached is not universally safe, because the express
+relayer could lie about the contents of the data, and the app has no way of knowing. Usually, apps opt in or out of
+this behavior by defining a specific endpoint. However, with ITS hub this is not possible, since only the first leg
+of the call will be expressed, and the app has no way of knowing.
+
+The solution is to maintain a whitelist in ITS hub of apps that can receive express executed transfers with data.
+Apps can add themselves to this whitelist by sending a special call to the hub. This message type will be a variant
+of `HubMessage` and will be handled similarly to `RegisterTokenMetadata`
+
+```rust
+
+struct AllowExpressExecution {
+    contract_address: HexBinary,
+}
+```
+
+There will be a method on the edge contract that allows apps to whitelist themselves.
 
 ### Components to build
 
