@@ -118,7 +118,7 @@ message AddressRequest {}
 
 message AddressResponse { string address = 1; }
 
-message ContractsRequest {}
+message ContractsRequest { string chain_name = 1; }
 
 message ContractsResponse {
   string voting_verifier = 1;
@@ -208,10 +208,12 @@ service BlockchainService {
    * Contracts returns the addresses of the amplifier contracts that event
    * handlers need to interact with.
    *
-   * @param ContractsRequest
+   * @param ContractsRequest Contains the chain name to query for the contracts
    * @returns ContractsResponse with the contract addresses
    *
    * Error Codes:
+   * - Status InvalidArgument: Chain name is invalid
+   * - Status NotFound: Chain name is not found
    * - Status Internal: Contract address retrieval fails for any reason
    */
   rpc Contracts(ContractsRequest) returns (ContractsResponse) {}
