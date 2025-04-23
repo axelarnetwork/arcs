@@ -37,7 +37,7 @@ ARCs fall into several technical categories:
 ## Resources
 
 - [Axelar Protocol Specifications](https://docs.axelar.dev/protocol)
-- [Technical Whitepaper](https://docs.axelar.dev/whitepaper)
+- [Technical Whitepaper](https://www.axelar.network/whitepaper)
 - [Core Protocol GitHub Repository](https://github.com/axelarnetwork/axelar-core)
 - [Amplifier and ITS Protocol GitHub Repository](https://github.com/axelarnetwork/axelar-amplifier)
 
