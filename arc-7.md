@@ -16,11 +16,11 @@
 
 ## Summary
 
-This ARC proposes a way to override the service parameters per chain.
+This ARC proposes a way to override some service parameters per chain.
 
 ## Background and Motivation
 
-Currently, the protocol has been using a single service for all the chains it supports. However, sometimes when a new chain is integrated, it is necessary to gradually onboard the verifiers, which means using a service with a higher verifier set size requirement would block the chain from functioning until enough verifiers are onboarded. This could be solved by using a different service with a lower verifier set size, but this would require verifiers to bond again for the new service and, once the chain is ready to use higher requirements, the Voting Verifier and Multisig Prover would need a migration to switch to the original more restrictive service. Adding the capability to override the service parameters per chain would simplify the process of onboarding new chains and would allow the Voting Verifier and Multisig Prover to be used in the same way as the current service.
+Currently, the protocol has been using a single service for all the chains it supports. However, sometimes when a new chain is integrated, it is necessary to gradually onboard the verifiers, which means using a service with a higher verifier set size requirement would block the chain from functioning until enough verifiers are onboarded. This could be solved by using a different service with a lower verifier set size, but this would require verifiers to bond again for the new service and, once the chain is ready to use higher requirements, the Voting Verifier and Multisig Prover would need a migration to switch to the original more restrictive service. Adding the capability to override relevant service parameters per chain would simplify the process of onboarding new chains and would allow the Voting Verifier and Multisig Prover to be used in the same way as the current service.
 
 ## Registering Parameters Override
 
