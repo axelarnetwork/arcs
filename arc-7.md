@@ -68,13 +68,15 @@ The overriding parameters will be stored using a `Map` with `(&ServiceName, &Cha
 
 ## Applying The Override
 
-To mitigate accidentally ignoring the override parameters, it is proposed to restrict the visibility of the `SERVICES` state constant in the ServiceRegistry, so that it would only be accessible through a function call which receives the service name and optionally the chain name as parameters.
+To mitigate accidentally ignoring the override parameters, it is proposed to restrict the visibility of the `SERVICES` state constant in the ServiceRegistry, so that it would only be accessible through a function call which receives the service name and the chain name as parameters.
 
 ```rust
-pub fn service(service_name: &ServiceName, chain: Option<&ChainName>) -> Result<Service, ContractError>
+pub fn service(service_name: &ServiceName, chain: &ChainName) -> Result<Service, ContractError>
 ```
 
-If the chain name is provided and there is an override registered for the given service and chain combination, then the corresponding override parameters will overwrite the default values before being returned. Otherwise, the default service parameters will be used.
+If there is an override registered for the given service and chain combination, then the corresponding override parameters will overwrite the default values before being returned. Otherwise, the default service parameters will be used.
+
+If there is need to retrieve the default values, the proposal is to add a `default_service_params` function, which will return the default service parameters for the given service name. This way, it will be more explicit that the information is coming from the default values, and not from an override.
 
 ## Remove Override
 
