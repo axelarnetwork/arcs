@@ -22,6 +22,26 @@ This ARC proposes a way to override some service parameters per chain.
 
 Currently, the protocol has been using a single service for all the chains it supports. However, sometimes when a new chain is integrated, it is necessary to gradually onboard the verifiers, which means using a service with a higher verifier set size requirement would block the chain from functioning until enough verifiers are onboarded. This could be solved by using a different service with a lower verifier set size, but this would require verifiers to bond again for the new service and, once the chain is ready to use higher requirements, the Voting Verifier and Multisig Prover would need a migration to switch to the original more restrictive service. Adding the capability to override relevant service parameters per chain would simplify the process of onboarding new chains and would allow the Voting Verifier and Multisig Prover to be used in the same way as the current service.
 
+## Solution Constraints
+
+This solution proposes a set of parameters that can be overridden per chain, while the rest of the parameters must not be overridden in order to maintain the protocol's consistency and the integrity of the bonding mechanism.
+
+The following parameters can be overridden:
+
+- min_num_verifiers
+- max_num_verifiers
+
+The following parameters cannot be overridden:
+
+- name
+- description
+- coordinator_contract
+- min_verifier_bond
+- bond_denom
+- unbonding_period_days
+
+If any of the restricted parameters needs to be changed, it is advised to use a different service instead of overriding the parameters.
+
 ## Registering Parameters Override
 
 In order to register a new service parameters override, the proposal is to add `OverrideServiceParams` variant to the ServiceRegistry's `ExecuteMsg`, similar to how the `UpdateService` message is used to update the service parameters.
