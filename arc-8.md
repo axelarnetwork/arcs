@@ -40,7 +40,7 @@ Instantiating these contracts can be tedious, as they must each be provided with
 
 ## Requirements
 
-
+The coordinator must be able to resolve all dependencies between the Gateway, Voting Verifier and Prover. The user must only be responsible for supplying chain specific information that cannot be otherwise inferred.
 
 ## Detailed Design
 
