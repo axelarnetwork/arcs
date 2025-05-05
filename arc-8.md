@@ -50,6 +50,31 @@ Instantiating these contracts can be tedious, as they must each be provided with
 
 ## Detailed Design
 
+```mermaid
+sequenceDiagram
+autonumber
+actor User
+participant WASM
+box LightYellow Axelar
+participant Coordinator
+participant Gateway
+participant Voting-Verifier
+participant Multisig-Prover
+end
+
+User->>+WASM: Query Gateway, Prover & Verifier Code IDs
+WASM->>+User: Respond with code IDs
+User->>+User: Construct deployment params using code IDs
+User->>+Coordinator: DeployCoreContracts (chain name, params)
+Coordinator->>+Coordinator: Compute instantiate2 addresses and salts
+Coordinator->>+Gateway: Instantiate2 (params)
+Gateway->>+Coordinator: Respond with gateway address
+Coordinator->>+Voting-Verifier: Instantiate2 (params, gateway address)
+Voting-Verifier->>+Coordinator: Respond with verifier address
+Coordinator->>+Multisig-Prover: Instantiate2 (params, gateway address, verifier address)
+Multisig-Prover->>+Coordinator: Respond with prover address
+Coordinator->>+User: Event (gateway address, verifier address, prover address)
+```
 
 ### References
 Draft PR: https://github.com/axelarnetwork/axelar-amplifier/pull/823
