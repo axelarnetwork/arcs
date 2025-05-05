@@ -15,7 +15,7 @@
 
 -  **Created**: 2025-04-25
 
--  **Last Updated**: 2025-04-25
+-  **Last Updated**: 2025-05-05
 
 -  **Target Implementation**: Q2 2025
 
@@ -40,12 +40,18 @@ Instantiating these contracts can be tedious, as they must each be provided with
 
 ## Requirements
 
-The coordinator must be able to resolve all dependencies between the Gateway, Voting Verifier and Prover. The user must only be responsible for supplying chain specific information that cannot be otherwise inferred.
+- **Dependency Resolution:** The coordinator must be able to resolve all dependencies between the Gateway, Voting Verifier and Prover. The user must only be responsible for supplying chain specific information that cannot be otherwise inferred. This includes the code IDs for the gateway, verifier and prover.
+- **Chain Name Uniqueness:** The router is responsible for directing messages between gateways. In order to ensure unambiguity, the router enforces chain names to be unique. The coordinator should not interfere with this process. This means:
+    - A user cannot deploy contracts using a chain name that is already registered in the router.
+    - A user cannot deploy contracts using a chain name that was already deployed using the coordinator.
+    - A user should not be able to block chain names from being used in the future.
+    
+    This will likely require coordination between the coordinator and the router contracts. Furthermore, the governance address should be able to correct/enforce the blockchain naming scheme where necessary.
 
 ## Detailed Design
 
 
 ### References
-
+Draft PR: https://github.com/axelarnetwork/axelar-amplifier/pull/823
   
 ### Changelog
