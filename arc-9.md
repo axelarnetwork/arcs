@@ -47,7 +47,7 @@ The proposed metrics system will be implemented as a client-server architecture 
    - Type-safe enum-based message definitions
    - Allows for modifying specific messages
 
-## Detailed Design (will be updated in the future)
+## Detailed Design 
 
 ### Overview
 
@@ -87,30 +87,29 @@ impl MetricsClient {
 
 ### Server Implementation
 
-The Server component initializes a receiver and an optional HTTP listener:
+The `Server` component is responsible for receiving metric messages and exposing Prometheus-compatible endpoints. It operates in two modes: real (with HTTP endpoints) and dummy (no endpoints, discards messages).
+
+
+#### Dummy Server Mode
+
+If no bind address is provided, the server runs in dummy mode. In this mode:
+
+- No HTTP endpoints are exposed.
+- All received metric messages are discarded.
+- The metrics interface remains available to the application, but no metrics are collected or exported.
+
 
 ```rust
-pub struct Server {
-    bind_address: Option<SocketAddrV4>,
-    metrics_rx: mpsc::Receiver<MetricsMsg>,
-}
-
-impl Server {
-    pub fn new(bind_address: Option<SocketAddrV4>) -> Result<(Self, MetricsClient), MetricsError> {
-        let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
-        let client = MetricsClient::new(tx);
-        let server = Self {
-            bind_address,
-            metrics_rx: rx,
-        };
-        Ok((server, client))
-    }
+if self.bind_address.is_none() {
+    tokio::spawn(async move {
+        let mut rx = self.metrics_rx;
+        while let Some(_msg) = rx.recv().await {
+            // Discard message
+        }
+    });
+    // No HTTP server started
 }
 ```
-
-The server processes incoming metric messages and exposes /metrics via an Axum router.
-
-**Note:** If no bind address is provided, the server starts in a dummy mode. In this mode, it receives metric messages but does nothing with them—no HTTP endpoints are exposed, and no metrics are collected or exported. This ensures that the metrics interface remains available to the application even when metrics collection is not required.
 
 ### Metrics Collection
 
