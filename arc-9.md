@@ -20,13 +20,27 @@ This ARC proposes the integration of Prometheus metrics into Ampd to provide com
 
 ## Background and Motivation
 
-AMPD is a core component in Axelar's infrastructure that verifies cross-chain messages. Its reliability and correctness are critical for secure interchain communication. As the complexity and scale of the system grow, observability becomes essential to:
+As AMPD grows in complexity—supporting more chains, verification mechanisms, and runtime environments—observability becomes essential for maintaining security, performance, and operational reliability.
 
-- Detect and investigate anomalies (e.g., failed transactions, verifier issues)
-- Identify performance bottlenecks (e.g., block processing delays)
-- Provide confidence to operators and SREs through quantitative signals
+To address this, we are introducing structured, consistent, and low-overhead Prometheus metrics across core components of AMPD. The scope includes:
 
-This ARC ensures Prometheus metrics are exposed in a structured, consistent, and low-overhead manner.
+- **The core AMPD daemon** (transaction execution, event handling)
+- **Chain connector modules** (e.g., Ethereum, Cosmos, Sui)
+- **Verifier modules** (e.g., Multisig, Voting)
+- **Runtime environments** (e.g., local and production deployments)
+
+This enables us to:
+
+- **Detect and investigate anomalies**  
+  Metrics like `ampd_errors_total` and `contract_execution_failures_total` help surface issues such as stuck transactions, verifier misbehavior, or degraded RPC performance—enabling faster debugging and recovery.
+
+- **Identify performance bottlenecks**  
+  Histograms such as `ampd_transaction_duration_seconds` allow us to pinpoint slow chains or inefficient verification steps, supporting throughput optimization and latency reduction.
+
+- **Ensure operational transparency and readiness**  
+  Resource usage metrics like `ampd_cpu_usage_percent` and `ampd_memory_usage_bytes` help ensure AMPD runs within safe resource thresholds, especially in production environments with strict limits.
+
+
 
 ## Architecture
 
@@ -62,15 +76,19 @@ Metrics updates are modeled as enum variants for type safety and extensibility:
 #[derive(Debug, Clone)]
 pub enum MetricsMsg {
     IncBlockReceived,
-    // will add other metrics here with explanation
+    // to be extended
 }
 ```
 
 ### Client Implementation
 
-The MetricsClient provides a non-blocking interface to send metric update messages over a bounded channel:
+The MetricsClient provides a thread-safe, non-blocking interface for recording metrics. It uses a bounded channel with a capacity of 1000 (CHANNEL_SIZE) to queue metric update messages. 
+This number is chosen to handle expected peak loads, ensuring the system can process bursts of updates without exceeding resource limits.
+
 
 ```rust
+const CHANNEL_SIZE: usize = 1000;
+
 pub struct MetricsClient {
     sender: mpsc::Sender<MetricsMsg>,
 }
@@ -78,8 +96,7 @@ pub struct MetricsClient {
 impl MetricsClient {
     pub fn record_metric(&self, msg: MetricsMsg) -> Result<(), MetricsError> {
         self.sender
-            .try_send(msg)
-            .change_context(MetricsError::MetricUpdateFailed)?;
+            .try_send(msg);
         Ok(())
     }
 }
@@ -87,92 +104,13 @@ impl MetricsClient {
 
 ### Server Implementation
 
-The `Server` component is responsible for receiving metric messages and exposing Prometheus-compatible endpoints. It operates in two modes: real (with HTTP endpoints) and dummy (no endpoints, discards messages).
+The `Server` component is responsible for receiving metric messages and exposing Prometheus-compatible endpoints. It operates in two modes: 
 
+#### Live Server Mode
 
-#### Dummy Server Mode
+In this mode, the server exposes HTTP endpoints for metrics collection and health checks. It processes incoming metric messages and updates the Prometheus registry accordingly.
 
-If no bind address is provided, the server runs in dummy mode. In this mode:
-
-- No HTTP endpoints are exposed.
-- All received metric messages are discarded.
-- The metrics interface remains available to the application, but no metrics are collected or exported.
-
-
-```rust
-if self.bind_address.is_none() {
-    tokio::spawn(async move {
-        let mut rx = self.metrics_rx;
-        while let Some(_msg) = rx.recv().await {
-            // Discard message
-        }
-    });
-    // No HTTP server started
-}
-```
-
-### Metrics Collection
-
-Metrics are stored in a struct and registered to a central prometheus::Registry. Messages are handled using a match block:
-
-```rust
-pub struct Metrics {
-    metrics: IntCounter,
-}
-
-impl Metrics {
-    pub fn new(registry: &Registry) -> Result<Self, MetricsError> {
-        let block_received = IntCounter::new("metrics_name", "description")
-            .change_context(MetricsError::MetricSpawnFailed)?;
-        // register metrics
-        registry
-            .register(Box::new(block_received.clone()))
-            .change_context(MetricsError::MetricRegisterFailed)?;
-
-        Ok(Self { block_received })
-    }
-
-    pub fn handle_message(&self, msg: MetricsMsg) {
-        match msg {
-            MetricsMsg::MetricsMsgType=> {
-                self.metrics.inc(); // handling logic here , will be different depending on the metrics
-                ...
-            }
-        }
-    }
-}
-```
-
-### Component Integration
-
-The metrics client is injected during application setup. For example, event handlers receive it during configuration:
-
-```rust
-fn create_handler_task<L, H>(
-    &mut self,
-    label: L,
-    handler: H,
-    event_processor_config: event_processor::Config,
-    metric_client: MetricsClient,  // Injected here
-) -> CancellableTask<Result<(), event_processor::Error>>
-```
-
-Within the event handler, metrics are recorded as follows:
-
-```rust
-if let StreamStatus::Active(Event::BlockEnd(height)) = &stream_status {
-    if let Err(err) = metric_client.record_metric(MetricsMsg::IncBlockReceived) {
-        warn!(
-            handler = handler_label,
-            height = height.value(),
-            err = %err,
-            "failed to update metrics for block end event"
-        );
-    }
-}
-```
-
-### HTTP Endpoints
+The live server listens on the specified bind address and exposes two HTTP endpoints:
 
 The metrics server exposes two routes:
 
@@ -193,19 +131,71 @@ async fn status() -> (StatusCode, Json<Status>) {
 }
 ```
 
+#### Dummy Server Mode
+
+If no bind address is provided, the server runs in dummy mode. In this mode:
+
+- No HTTP endpoints are exposed.
+- All received metric messages are discarded.
+- The metrics interface remains available to the application, but no metrics are collected or exported.
+
+
+
+### Metrics Collection
+
+Metrics are stored in a struct and registered to a central Registry. Incoming messages are handled using a match block to update the appropriate metrics.
+
+```rust
+pub struct Metrics {
+    metrics: MetricsType,
+}
+
+impl Metrics {
+    pub fn new(registry: &Registry) -> Result<Self, MetricsError> {
+        let metric = IntCounter::new("metrics_name", "description");
+        // register metrics
+        registry
+            .register(Box::new(metric.clone()));
+
+        Ok(Self { metric })
+    }
+
+    pub fn handle_message(&self, msg: MetricsMsg) {
+        match msg {
+            MetricsMsg::MetricsMsgType=> {
+                self.metrics.inc(); // Each metric type may have unique handling requirements
+                ...
+            }
+        }
+    }
+}
+```
+
+### Component Integration
+
+The MetricsClient is injected into key components during application setup, enabling them to record metrics. For example, an event handler can use the MetricsClient to track metrics for specific events:
+
+
+```rust
+if let StreamStatus::Active(Event::BlockEnd(height)) = &stream_status {
+    metric_client.record_metric(MetricsMsg::IncBlockReceived).ok();
+}
+```
+
+
+
 ## Future Work
 
 ### Metrics Expansion and Deployment
 
 - Define and implement additional metrics for verifier status, transaction results, and error rates
-- Update CI/CD pipelines to deploy Ampd with Prometheus endpoints enabled
 - Extend Dockerfile and Helm charts to support metrics exposure and scraping
 
 ### Custom Event Metrics Interface
 
 - Introduce a developer-friendly interface to define custom metrics per event type
 - Create a base schema for common metrics and utility functions for recording
-- Document best practices for metrics instrumentation within Ampd
+
 
 ## Changelog
 
