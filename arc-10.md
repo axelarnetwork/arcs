@@ -41,21 +41,21 @@ The translation contract must implement the following CosmWasm query interface:
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    #[returns(interchain_token_service::primitives::HubMessage)]
+    #[returns(interchain_token_service::HubMessage)]
     FromBytes { payload: HexBinary },
     
     #[returns(HexBinary)]
-    ToBytes { message: interchain_token_service::primitives::HubMessage },
+    ToBytes { message: interchain_token_service::HubMessage },
 }
 ```
 
 1. **FromBytes**: Converts chain-specific raw payload to standardized ITS Hub Message format
    - Takes `payload: HexBinary` containing the raw payload encoded in the chain-specific format
    - Validates payload structure and extracts relevant fields
-   - Returns standardized `interchain_token_service::primitives::HubMessage` or error if translation fails
+   - Returns standardized `interchain_token_service::HubMessage` or error if translation fails
 
 2. **ToBytes**: Converts standardized ITS Hub Message to chain-specific payload format
-   - Takes `message: interchain_token_service::primitives::HubMessage` 
+   - Takes `message: interchain_token_service::HubMessage` 
    - Encodes message fields according to target chain requirements
    - Returns `HexBinary` representing the payload encoded in the chain specific format or error if translation fails
 
