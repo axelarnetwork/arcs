@@ -41,21 +41,21 @@ The translation contract must implement the following CosmWasm query interface:
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    #[returns(interchain_token_service::primitives::Message)]
+    #[returns(interchain_token_service::primitives::HubMessage)]
     FromBytes { payload: HexBinary },
     
     #[returns(HexBinary)]
-    ToBytes { message: interchain_token_service::primitives::Message },
+    ToBytes { message: interchain_token_service::primitives::HubMessage },
 }
 ```
 
-1. **FromBytes**: Converts chain-specific raw payload to standardized ITS Message format
+1. **FromBytes**: Converts chain-specific raw payload to standardized ITS Hub Message format
    - Takes `payload: HexBinary` containing the raw payload encoded in the chain-specific format
    - Validates payload structure and extracts relevant fields
-   - Returns standardized `interchain_token_service::primitives::Message` or error if translation fails
+   - Returns standardized `interchain_token_service::primitives::HubMessage` or error if translation fails
 
-2. **ToBytes**: Converts standardized ITS Message to chain-specific payload format
-   - Takes `message: interchain_token_service::primitives::Message` 
+2. **ToBytes**: Converts standardized ITS Hub Message to chain-specific payload format
+   - Takes `message: interchain_token_service::primitives::HubMessage` 
    - Encodes message fields according to target chain requirements
    - Returns `HexBinary` representing the payload encoded in the chain specific format or error if translation fails
 
@@ -112,6 +112,41 @@ Translation contract upgrades are safe to perform because:
 3. **Atomic updates**: When a translation contract is updated via `UpdateChains`, all subsequent messages from that chain will use the new translation contract, ensuring consistency.
 
 This design allows for translation logic improvements, bug fixes, and support for new message formats without compromising the security or integrity of the ITS Hub.
+
+### Message Flow Diagram
+
+The following sequence diagram illustrates the message flow through the ITS Hub with translation hooks:
+
+```mermaid
+sequenceDiagram
+    participant SrcGateway as Source Gateway
+    participant Router as Router
+    participant Hub as ITS Hub
+    participant SourceTC as Source Translation Contract
+    participant DestTC as Dest Translation Contract
+    participant DestGateway as Dest Gateway
+
+    Note over SrcGateway, DestGateway: Cross-chain message with translation
+
+    SrcGateway->>Router: Route message
+    Router->>Hub: Execute message
+    Note right of Router: Payload in source chain format
+
+    Hub->>SourceTC: Query FromBytes
+    Note right of Hub: Decode payload into standardized message
+    SourceTC-->>Hub: Standard ITS HubMessage
+    
+    Note over Hub: Process standardized message
+    Note over Hub: Compute message to send to destination
+
+    Hub->>DestTC: Query ToBytes
+    Note right of Hub: Encode message in dest chain format
+    DestTC-->>Hub: Chain-specific payload
+
+    Hub->>Router: Route to destination
+    Note right of Router: Payload in destination format
+    Router->>DestGateway: Send to destination
+```
 
 ## Implementation
 
