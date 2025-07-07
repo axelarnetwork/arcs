@@ -3,8 +3,9 @@
 ## Metadata
 
 - **ARC ID**: [N]
-- **Author(s)**: [author name]
-- **Status**: [Draft/Final]
+- **Author(s)**: [author(s) name]
+- **Category**: [Amplifier Protocol/Interchain Token Protocol/Cryptography/Governance/Meta]
+- **Status**: [Draft/Review/Specification/Implmentation/Activation]
 - **Created**: [date created]
 - **Last Updated**: [date updated]
 - **Target Implementation**: [quarter] [year]
