@@ -19,8 +19,6 @@
 
 ## Design
 
-## Implementation
-
 ## Future Work
 
 ## References
