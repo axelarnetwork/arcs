@@ -13,17 +13,32 @@
 
 ## Summary
 
+An overview of what this ARC proposes and its intended outcome.
+
 ## Background and Motivation
+
+Context and rationale behind the need for this proposal.
 
 ## Requirements
 
+Any functional, technical, or implementational needs this ARC must satisfy.
+
 ## Design
+
+Details on how this ARC will be structured and implemented.
 
 ## Future Work
 
+Potential planned follow-ups to this ARC.
+
 ## References
+
+Citations or resources used in creating this ARC.
 
 ## Changelog
 
-| Date | Revision | Author | Description |
-|------|-----------|---------|-------------|
+Chronological log of changes to this ARC.
+
+|  Date  | Revision  | Author |  Description  |
+|--------|-----------|--------|---------------|
+| [date] | [version] | [name] | [description] |
