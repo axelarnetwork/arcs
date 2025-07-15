@@ -43,26 +43,26 @@ Consequently, the chain-codec contract will implement the following interface:
 
 ```rust
 pub enum QueryMsg {
-	/// Returns a digest for identifying a payload. This is what gets signed by the verifiers.
-	#[returns(Hash)]
-	PayloadDigest {
-	    domain_separator: Hash,
-		signer: VerifierSet,
-		payload: Payload,
-	}
-	/// Encodes the execute data for the target chain that the relayer will submit.
-	#[returns(HexBinary)]
-	EncodeExecData {
-	    domain_separator: Hash,
-		verifier_set: VerifierSet,
-		signers: Vec<SignerWithSig>,
-		payload: Payload,
-	}
-	/// Returns `true` iff the given address is formatted as a valid address on the chain.
+    /// Returns a digest for identifying a payload. This is what gets signed by the verifiers.
+    #[returns(Hash)]
+    PayloadDigest {
+        domain_separator: Hash,
+        signer: VerifierSet,
+        payload: Payload,
+    }
+    /// Encodes the execute data for the target chain that the relayer will submit.
+    #[returns(HexBinary)]
+    EncodeExecData {
+        domain_separator: Hash,
+        verifier_set: VerifierSet,
+        signers: Vec<SignerWithSig>,
+        payload: Payload,
+    }
+    /// Returns `true` iff the given address is formatted as a valid address on the chain.
     #[returns(bool)]
-	ValidateAddress {
-		address: Address,
-	}
+    ValidateAddress {
+        address: Address,
+    }
 }
 ```
 
@@ -74,6 +74,7 @@ This will require either deploying the chain-codec contract first and only deplo
 ## References
 
 Aleo contracts: https://github.com/eigerco/axelar-amplifier/tree/aleo-its-mr/contracts
+
 Solana contracts: https://github.com/eigerco/axelar-amplifier/tree/solana-cosmwasm/contracts
 
 ## Changelog
