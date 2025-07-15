@@ -1,8 +1,8 @@
-# ARC-9: Chain Codec Contract
+# ARC-11: Chain Codec Contract
 
 ## Metadata
 
-- **ARC ID**: 9
+- **ARC ID**: 11
 - **Author(s)**: Christoph Otter
 - **Category**: Amplifier Protocol
 - **Status**: Draft
