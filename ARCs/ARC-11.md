@@ -22,7 +22,7 @@ Currently when adding a new chain, three contracts need to be provided / impleme
 The multisig-prover's main function is to manage proofs about messages or validator set updates.
 To do that, it needs to send signing requests for them to the multisig contract, keep track of verifier sets and transform payloads into a format that can be processed by the destination chain. In most cases, the logic for proof construction and tracking the verifier set is not chain-specific, but the contract had to be forked to adjust the payload transformation logic, leading to code duplication and maintenance overhead.
 
-A similar situation exists for the voting-verifier contract, which is responsible for managing the verification process before the messages are routed and signed (e.g. that the messages really were sent on the source chain). It validates that the address of the sender address is a correct according to the source chain's address format. Other than that, it's the same for most chains.
+A similar situation exists for the voting-verifier contract, which is responsible for managing the verification process before the messages are routed and signed (e.g. that the messages really were sent on the source chain). It validates that the address of the sender address is a correct according to the source chain's address format. Other than that, it's the same for most chains (see Aleo and Solana contract).
 
 The goal of this ARC is to adjust the multisig-prover and voting-verifier contracts in such a way that all this chain-specific logic can be implemented without the need for contract duplication.
 
@@ -73,8 +73,8 @@ This will require either deploying the chain-codec contract first and only deplo
 
 ## References
 
-Aleo contracts: https://github.com/eigerco/axelar-amplifier/tree/aleo-its-mr/
-Solana contracts: https://github.com/eigerco/axelar-amplifier/tree/solana-cosmwasm
+Aleo contracts: https://github.com/eigerco/axelar-amplifier/tree/aleo-its-mr/contracts
+Solana contracts: https://github.com/eigerco/axelar-amplifier/tree/solana-cosmwasm/contracts
 
 ## Changelog
 
