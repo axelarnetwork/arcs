@@ -158,6 +158,13 @@ The implementation of this ARC will require a migration of the existing ITS Hub 
 2. **ABI Translation Contract Deployment**: Deploy a new ABI translation contract that contains the existing ABI encoding/decoding logic currently embedded in the ITS Hub
 3. **Chain Registration Updates**: Register translation contracts for all existing chains during the migration
 
+```rust
+pub struct MigrateMsg {
+    /// Address of the ABI translation contract to use for all chains
+    pub msg_translator: Address,
+}
+```
+
 ### Translation Contract Registration
 
 All existing chains will need to have translation contracts registered during the migration process:
