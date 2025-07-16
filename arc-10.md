@@ -18,7 +18,7 @@
 
 ## Abstract
 
-This ARC proposes the addition of translation hooks to the Interchain Token Service (ITS) Hub to enable seamless message translation between chain-specific payload formats and the standardized `interchain_token_service::Message` type. Each registered chain will include a translation contract that provides bidirectional conversion capabilities.
+This ARC proposes the addition of translation hooks to the Interchain Token Service (ITS) Hub to enable seamless message translation between chain-specific payload formats and the standardized `interchain_token_service::HubMessage` type. Each registered chain will include a translation contract that provides bidirectional conversion capabilities.
 
 ## Motivation
 
