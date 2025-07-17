@@ -25,7 +25,7 @@ Any functional, technical, or implementational needs this ARC must satisfy.
 
 ## Design
 
-Details on how this ARC will be structured and implemented.
+Details on how this ARC will be structured and implemented. Implementation details should be kept to a minimum to prevent getting out-of-date too fast.
 
 ## Future Work
 
