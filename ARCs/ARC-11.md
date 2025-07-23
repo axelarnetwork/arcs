@@ -34,48 +34,84 @@ It should still be possible for chains to fork the multisig-prover and voting-ve
 
 This ARC proposes to move the chain-specific logic into a separate chain-codec contract, which will be responsible for transforming the payloads and validating addresses. The multisig-prover and voting-verifier contracts will then query the chain-codec contract to perform their chain-specific conversions.
 
-For the multisig-prover, the chain-specific part seems to be limited to the transformation of the payload into a format that can be processed by the destination chain (see for example the Solana contract linked below). This logic is currently controlled by an enum passed in the `InstantiateMsg` of the multisig-prover contract.
-It will be replaced by a query to the chain-codec contract.
+For the multisig-prover, the chain-specific part is limited to the transformation of the payload into a format that can be processed by the destination chain (see for example the Solana contract linked below). This logic is currently controlled by an enum passed in the `InstantiateMsg` of the multisig-prover contract. The actual transformation is implemented as an `EncoderExt` trait:
 
-For the voting-verifier, the chain-specific part is the validation of the address format. This logic is currently implemented in the `validate_address` function of the `axelar-wasm-std` crate. It will also be replaced by a query to the chain-codec contract.
+```rust
+pub trait EncoderExt {
+    fn digest(
+        &self,
+        domain_separator: &Hash,
+        verifier_set: &VerifierSet,
+        payload: &Payload,
+    ) -> Result<Hash, ContractError>;
 
-Consequently, the chain-codec contract will implement the following interface:
+    fn execute_data(
+        &self,
+        domain_separator: &Hash,
+        verifier_set: &VerifierSet,
+        sigs: Vec<SignerWithSig>,
+        payload: &Payload,
+    ) -> Result<HexBinary, ContractError>;
+}
+```
+
+The `digest` function is used to calculate a digest for the payload that will be signed by the verifiers. It is called by the multisig-prover contract during its `ConstructProof` message.
+In the XRPL integration, the proof construction stores information to the contract state, which is not possible in a query. So, in order to support this, the chain-codec contract will have to use an execute message variant for the digest calculation.
+The `execute_data` function will become a query to the new chain-codec contract, since it needs to be called from the multisig-prover's `Proof` query anyways.
+The multisig-prover contract will then call / query the chain-codec contract to get the digest and execute data for the payload.
+
+The `domain_separator` will become part of the new chain-codec contract. Since it is not used anywhere else in the multisig-prover contract, it can be removed from the multisig-prover's `InstantiateMsg`.
+
+Some chain integrations (e.g. XRPL) require more customization of the proof construction logic: they need to receive the full payload bytes in the `ConstructProof` message of the multisig-prover contract. To accommodate for this, a new feature flag will be added to the multisig-prover contract. When this feature is enabled, the `ConstructProof` message will include a `payload: HexBinary` field that contains the full payload bytes provided by the relayer. This will also be forwarded to the chain-codec contract.
+
+For the voting-verifier, the chain-specific part is the validation of the address format. This logic is currently implemented in the `validate_address` function of the `axelar-wasm-std` crate. The call to that function will also be replaced by a query to the chain-codec contract.
+
+Consequently, the chain-codec contract will implement the following interface, which will be provided in a `chain-codec-api` crate:
 
 ```rust
 pub enum QueryMsg {
-    /// Returns a digest for identifying a payload. This is what gets signed by the verifiers.
-    #[returns(Hash)]
-    PayloadDigest {
-        domain_separator: Hash,
-        signer: VerifierSet,
-        payload: Payload,
-    }
     /// Encodes the execute data for the target chain that the relayer will submit.
     #[returns(HexBinary)]
     EncodeExecData {
-        domain_separator: Hash,
         verifier_set: VerifierSet,
         signers: Vec<SignerWithSig>,
         payload: Payload,
-    }
-    /// Returns `true` iff the given address is formatted as a valid address on the chain.
-    #[returns(bool)]
+    },
+    /// This query must error if the address is malformed for the chain.
+    /// Not erroring is interpreted as a successful validation.
+    #[returns(Empty)]
     ValidateAddress {
         address: Address,
     }
+}
+
+pub enum ExecuteMsg {
+    /// This should return a digest for identifying the payload in the `Response::data`. This is what gets signed by the verifiers.
+    /// It's called by the multisig-prover contract during proof construction.
+    /// You can save additional information to the contract state if needed.
+    PayloadDigest {
+        signer: VerifierSet,
+        payload: Payload,
+        /// This field is only available if the multisig-prover contract was compiled with the `full-payload` feature flag.
+        /// Therefore, it is also feature-gated in this crate.
+        #[cfg(feature = "full-payload")]
+        payload_bytes: HexBinary,
+    },
 }
 ```
 
 In addition to this new contract, we should also add the optional `sig_verifier` address (used in multisig-prover when constructing a proof) to the multisig-prover's `InstantiateMsg`, since that is also a reason to fork the contract at the moment (see for example the Aleo contract). It can be stored in the contract's config and retrieved when needed.
 
 The new chain-codec contract will have to be deployed before the multisig-prover and voting-verifier contracts and provided to them in their `InstantiateMsg` as a parameter. This means we will have to make some changes to the one-click deployment described in [ARC-8](./ARC-8.md). It will also have to deploy the chain-codec contract and pass its address to the multisig-prover and voting-verifier contracts.
-This will require either deploying the chain-codec contract first and only deploying the others in a reply to the `InstantiateMsg` or using CosmWasm's `Instantiate2` feature to deploy the chain-codec contract with a predetermined address.
+This will require using CosmWasm's `Instantiate2` feature to deploy the chain-codec contract with a predetermined address that gets passed to the other contracts.
 
 ## References
 
 Aleo contracts: https://github.com/eigerco/axelar-amplifier/tree/aleo-its-mr/contracts
 
 Solana contracts: https://github.com/eigerco/axelar-amplifier/tree/solana-cosmwasm/contracts
+
+XRPL contracts: https://github.com/commonprefix/axelar-amplifier/tree/xrpl/contracts
 
 ## Changelog
 
