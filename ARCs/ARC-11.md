@@ -120,3 +120,4 @@ Chronological log of changes to this ARC.
 |  Date  | Revision  | Author |  Description  |
 |--------|-----------|--------|---------------|
 | 2025-07-15 | v1.0 | Christoph Otter | Initial draft |
+| 2025-07-23 | v1.1 | Christoph Otter | Change API to support more chains |
