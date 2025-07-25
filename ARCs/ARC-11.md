@@ -135,7 +135,7 @@ pub enum ExecuteMsg {
     /// It's called by the multisig-prover contract during proof construction.
     /// You can save additional information to the contract state if needed.
     PayloadDigest {
-        signer: VerifierSet,
+        verifier_set: VerifierSet,
         payload: Payload,
         /// This field is only available if the multisig-prover contract was compiled with the `receive-payload` feature flag.
         /// Therefore, it is also feature-gated in this crate.
