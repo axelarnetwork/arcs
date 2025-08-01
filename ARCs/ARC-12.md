@@ -39,6 +39,9 @@ decentralized and fault tolerant.
 
 - Implement an event verification contract with an API to request verification for a list of events.
 
+- The API should be able to verify events emitted by a contract call, as well as raw transaction details (which may not emit an event)
+  For example, the API should be able to verify a native asset transfer, and/or the calldata passed in a given transaction
+
 - API should be generic across all chains and event types.
 
 - One contract should handle requests for all chains (from the caller's perspective, can call other contracts internally).
@@ -99,14 +102,12 @@ pub struct EventToVerify {
     event_data: EventData,
 }
 
+#[cw_serde]
 pub struct EventId {
     // chain that emitted the event in question
-    source_chain: ChainName,
-    // same message id type as used for GMP
-    message_id: String,
-    // address of contract emitting the event
-    contract_address: Address
-
+    pub source_chain: ChainName,
+    // transaction id where the event was emitted
+    pub transaction_id: String,
 }
 
 ```
@@ -129,33 +130,39 @@ pub enum EventFormat {
     // additional variants for other blockchains can be added here
 }
 
-#[cw_serde]
 pub enum EventData {
     Evm {
-        topics: Vec<Uint256>, // 1-4 topics
-        data: HexBinary,      // arbitrary length hex data
+        // if present, verifies the transaction details
+        transaction_details: Option<EvmTransactionDetails>,
+        // verifies the presence of each event specified
+        events: Vec<EvmEvent>,
     },
     // Additional event variants for other blockchain types can be added here
 }
+
+pub struct EvmTransactionDetails {
+    pub calldata: HexBinary,
+    pub from: Address,
+    pub to: Address,
+    pub value: Uint256,
+}
+
+pub struct EvmEvent {
+    pub contract_address: Address, // address of contract emitting the event
+    pub event_index: u64,          // index of the event in the transaction
+    pub topics: Vec<HexBinary>,    // 1-4 topics
+    pub data: HexBinary,           // arbitrary length hex data
+}
 ```
 
-### Message ID
 
-The message ID will be handled the same way as GMP, via a string that must meet certain validation rules.
-It is possible to actually give the message ID proper typing, as the event data. However, we already have a
-lot of code in the amplifier repo to handle message IDs as strings, as well as off chain systems (axelarons, axelarscan)
-that handle message id's as strings, that it will be less engineering work to simply continue handling
-the message id as a string.
+### Integration with other amplifier contracts
 
-Furthermore, the existing underlying message ID types (`HexTxHashAndEventIndex`, for example) are mostly internal and
-were not designed to be passed as user input. For example, the `Hash` type, which is used in many of the message ID types, 
-serializes to a vector of integers, which is cumbersome for a caller to pass. The `tx_digest` of `Base58TxDigestAndEventIndex`
-is of type `Hash`, so callers cannot actually pass the tx digest as base58 (which is how callers pass the tx digest now, 
-as a string, which get converted to a hash internally). We would need to modify the existing types to be able to pass them
-as user input. Or we could create wrapper types that failably decode to the internal types; this is probably a cleaner approach,
-so we can avoid retrofitting the existing types, some of which we may not even need (i.e. for chains not supported).
-
-Lastly, having a single string to use as an identifier is useful in various contexts, both on chain and off chain.
+The event verifier will use the service registry to determine which verifiers support given chain. The existing chain names
+can be reused, which means all verifiers that support chain X for GMP also support chain X for event verification.
+Or new chain names could be used, to support different verifier sets. If new chain names are used, this could be abstracted
+away from the caller by retaining a mapping in the event verification contract from usual chain name to event verification specific
+chain name (i.e. use avalanche-events in the service registry, and map avalanche -> avalanche-events in the event verification contract)
 
 ## Future Work
 
@@ -173,3 +180,4 @@ Chronological log of changes to this ARC.
 |--------|-----------|--------|---------------|
 | 2025-07-16 | v1.0 | cjcobb23 | Add background and requirements | 
 | 2025-07-21 | v1.1 | cjcobb23 | Add API | 
+| 2025-08-01 | v1.2 | cjcobb23 | Update API | 
