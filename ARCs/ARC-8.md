@@ -15,7 +15,7 @@
 
 -  **Created**: 2025-04-25
 
--  **Last Updated**: 2025-05-23
+-  **Last Updated**: 2025-08-13
 
 -  **Target Implementation**: Q2 2025
 
@@ -48,28 +48,63 @@ Instantiating these contracts can be tedious, as they must each be provided with
     
     This will likely require coordination between the coordinator and the router contracts. Furthermore, the governance address should be able to correct/enforce the blockchain naming scheme where necessary.
 
-## Design
+- **Coordinator Instantiation Permission:** The coordinator contract address must have permission to instantiate contracts.
 
-### Definitions
-- **Privileged**: Any account that has permission to instantiate a gateway, voting-verifier and prover. Given a code id *n*, these accounts can be queried from the GRPC endpoint
-```
-cosmwasm.wasm.v1.Query/Code
-```
-using the argument 
-```
-{"code_id" : "n"}
-```
-- **Governance**: The governance account provided in the router's instantiation message.
+## Definitions
+
+- **Operator**: Any account that has permission to instantiate a gateway, voting verifier and prover. Given a code id *n*, these accounts can be queried from the GRPC endpoint
+- **Coordinator Governance**: The governance account provided in the coordinator's instantiation message.
+- **Router Governance**: The governance account provided in the router's instantiation message.
 - **Deployment Name**: Human readable name for the instantiation of a gateway, voting verifier and multisig prover. Deployment names MUST unique. Deployment names SHOULD be similar to the intended chain name.
 - **Chain Name**: Human readable chain name that will be registered with the router.
-- **Salt**: Bytes provided to WASM's Instantiate2 message to ensure predictable addressing. Salts MUST be unique to ensure contracts with the same bytecode are not given the same address (although, this is already enforced by the wasm module). Salts MAY be the same as the deployment name.
+- **Salt**: Bytes provided to CosmWasm's Instantiate2 message to ensure predictable addressing. Salts MUST be unique to ensure contracts with the same bytecode are not given the same address (although, this is already enforced by the wasm module). Salts MAY be the same as the deployment name.
 
-### Contract Instantiation
+## One-Click Deployment Design
+
+### 1. Uploading Contracts
+
+The bytecode for the gateway, voting verifier and prover must first be stored on Axelar. This will be done using governance proposals.
+
+### 2. Managing Operators
+
+Operators can be registered with or removed from the coordinator. In order to avoid having an unecessary amount of proposals, multiple operators can be registered or removed with the same proposal.
+
+#### Register
 
 ```mermaid
 sequenceDiagram
 autonumber
-actor Privileged
+actor Coordinator Governance
+box LightYellow Axelar
+participant Coordinator
+end
+
+Coordinator Governance->>+Coordinator: RegisterOperators ([operator_address_1, operator_address_2, ... ])
+```
+
+#### Remove
+
+```mermaid
+sequenceDiagram
+autonumber
+actor Coordinator Governance
+box LightYellow Axelar
+participant Coordinator
+end
+
+Coordinator Governance->>+Coordinator: RemoveOperators ([operator_address_1, operator_address_2, ... ])
+```
+
+### 3. Contract Instantiation
+
+We first instantiate contracts in a separate step before we registering them. This ensures that:
+1. Chain operators have the opportunity to correct configuration mistakes before registering their chain contracts with the protocol.
+2. Instantiation can be performed by authorized accounts without requiring a governance proposal.
+
+```mermaid
+sequenceDiagram
+autonumber
+actor Coordinator Governance OR Operator
 participant WASM
 box LightYellow Axelar
 participant Coordinator
@@ -78,10 +113,10 @@ participant Voting-Verifier
 participant Multisig-Prover
 end
 
-Privileged->>+WASM: Query Gateway, Prover & Verifier Code IDs
-WASM->>+Privileged: Respond with code IDs
-Privileged->>+Privileged: Construct deployment params using code IDs
-Privileged->>+Coordinator: DeployCoreContracts (deployment id, params, salt)
+Coordinator Governance OR Operator->>+WASM: Query Gateway, Prover & Verifier Code IDs
+WASM->>+Coordinator Governance OR Operator: Respond with code IDs
+Coordinator Governance OR Operator->>+Coordinator Governance OR Operator: Construct deployment params using code IDs
+Coordinator Governance OR Operator->>+Coordinator: InstantiateChainContracts (deployment id, params, salt)
 Coordinator->>+Coordinator: Yes/No (Is deployment name available?)
 break Name is not available
  Coordinator-->Coordinator: Return Failure
@@ -94,23 +129,24 @@ Voting-Verifier->>+Coordinator: Respond with verifier address
 Coordinator->>+Multisig-Prover: Instantiate2 (params, gateway address, verifier address)
 Multisig-Prover->>+Coordinator: Respond with prover address
 Coordinator->>+Coordinator: Store(key = deployment id, value = contract addresses)
-Coordinator->>+Privileged: Event (gateway address, verifier address, prover address)
+Coordinator->>+Coordinator Governance OR Operator: Event (contract addresses and code IDs)
 ```
 
-### Chain Registration
+### 4. Chain Registration
+
+A governance proposal registers the chain contracts with the protocol in this step.
 
 ```mermaid
 sequenceDiagram
 autonumber
-actor Governance
+actor Router Governance
 box LightYellow Axelar
 participant Coordinator
 participant Router
 participant Multisig
-participant Rewards
 end
 
-Governance->>+Coordinator: Register (chain name, deployment id, verifier rewards params, multisig rewards params)
+Router Governance->>+Coordinator: RegisterDeployment (deployment id)
 Coordinator->>+Router: Is chain name available?
 Router->>+Coordinator: Yes/No (Is chain name available?)
 break Chain name is not available
@@ -119,12 +155,12 @@ end
 Coordinator->>+Coordinator: (gateway address, verifier address, prover address) = Load(deployment id)
 Coordinator->>+Router: Register Chain (chain name, gateway address)
 Coordinator->>+Multisig: Authorize Callers (chain name, prover address)
-Coordinator->>+Rewards: Create Pool(verifier rewards params, verifier address)
-Coordinator->>+Rewards: Create Pool(multisig rewards params, multisig address)
-
 ```
 
-Contract instantiation and chain registration independently SHOULD be atomic.
+<!-- May add the following later to the chain registration process -->
+<!-- participant Rewards -->
+<!-- Coordinator->>+Rewards: Create Pool(verifier rewards params, verifier address) -->
+<!-- Coordinator->>+Rewards: Create Pool(multisig rewards params, multisig address) -->
 
 ## Types
 
@@ -134,11 +170,26 @@ The public interface for executing transactions on the coordinator is enhanced a
 pub enum ExecuteMsg {
     ...
 
-    DeployCoreContracts {
-        deployment_name: String,
+    #[permission(Governance)]
+    RegisterOperators { operators: HashSet<Addr> },
+
+    #[permission(Governance)]
+    RemoveOperators { operators: HashSet<Addr> },
+
+    #[permission(Governance, Specific(operator))]
+    InstantiateChainContracts {
+        deployment_name: nonempty::String,
         salt: Binary,
-        params: DeploymentParams,
-    }
+        // Make params a Box to avoid having a large discrepancy in variant sizes
+        // Such an error will be flagged by "cargo clippy..."
+        params: Box<DeploymentParams>,
+    },
+
+    /// `RegisterDeployment` calls the router using `ExecuteMsgFromProxy`.
+    /// The router will enforce that the original sender has
+    /// permission to register the deployment.
+    #[permission(Governance)]
+    RegisterDeployment { deployment_name: nonempty::String },
 }
 ```
 
@@ -154,6 +205,7 @@ pub struct ContractInfo<T> {
     pub code_id: u64,
     pub label: String,
     pub msg: T,
+    pub contract_admin: Addr,
 }
 
 pub struct ManualDeploymentParams {
@@ -277,11 +329,11 @@ pub struct ProverMsg {
     pub domain_separator: Hash,
 }
 
+#[cw_serde]
 pub struct VerifierMsg {
-    pub governance_address: String,
-    pub service_name: String,
-    pub source_chain: String,
-    pub source_gateway_address: String,
+    pub governance_address: nonempty::String,
+    pub service_name: nonempty::String,
+    pub source_gateway_address: nonempty::String,
     pub voting_threshold: MajorityThreshold,
     pub block_expiry: nonempty::Uint64,
     pub confirmation_height: u64,
@@ -292,7 +344,7 @@ pub struct VerifierMsg {
 }
 ```
 
-## Implementation
+## Implementation Pseudo Code
 
 ### Contract Instantiation
 
@@ -304,18 +356,15 @@ pub fn instantiate_chain_contracts(
 ) -> Result<Response, ContractError> {
 	// The results that will be returned
 	let mut result = Result::new();
-	let config: Config = load_config();
 	
-	// Make sure the chain name is not in use
-	if deployment_name_used(deployment_name) {
-		return Err(ContractError);
-	}
+    let protocol =
+        state::protocol_contracts(deps.storage).change_context(Error::ProtocolNotRegistered)?;
 	
 	match params {
 		DeploymentParams::Manual(params) => {
 	    // Compute new verifier address using instantiate2 algorithm
 	    let new_verifier_addr: Addr = compute_instantiate2_address(
-            verifier.code_id,
+            params.verifier.code_id,
             salt,
         );
 
@@ -323,7 +372,7 @@ pub fn instantiate_chain_contracts(
         msgs.push(instantiate2 (
             GatewayInstantiateMsg {
                 new_verifier_addr,
-                config.router,
+                protocol.router,
             },
             params.gateway.label,
             salt
@@ -331,14 +380,14 @@ pub fn instantiate_chain_contracts(
         
         // Compute new gateway address using instantiate2 algorithm
         let new_gateway_addr: Addr = compute_instantiate2_address(
-            gateway.code_id,
+            params.gateway.code_id,
             salt,
         );
         
         // Instantiate Voting Verifier
         msgs.push(instantiate2 (
             VerifierInstantiateMsg {
-                service_registry_address: config.service_registry,
+                service_registry_address: protocol.service_registry,
                 ...params.verifier.msg,
             }
             params.verifier.label,
@@ -348,11 +397,10 @@ pub fn instantiate_chain_contracts(
         // Instantiate Prover
         msgs.push(instantiate2 (
             ProverInstantiateMsg {
-                admin_address: info.sender,
                 coordinator_address: env.contract.address,
                 gateway_address: new_gateway_addr,
-                multisig_address: config.multisig,
-                service_registry_address: config.service_registry,
+                multisig_address: protocol.multisig,
+                service_registry_address: protocol.service_registry,
                 voting_verifier_address: new_verifier_addr,
                 ...params.prover.msg,
             }
@@ -360,8 +408,8 @@ pub fn instantiate_chain_contracts(
             salt,
         ));
         
-        // Store chain name to prevent reuse
-        coordinator_deployed(deployment_name);
+        // Save deployment configuration for registration later
+        save_deployed_contracts(deployment_name, contracts...);
         
         // Add messages to be sent
         results = results.add_messages(msgs)
@@ -374,11 +422,37 @@ pub fn instantiate_chain_contracts(
 
 ### Chain Registration
 
-TODO
+```rust
+pub fn register_deployment(
+    deps: DepsMut,
+    original_sender: Addr,
+    deployment_name: nonempty::String,
+) -> Result<Response, ContractError> {
+    let deployed_contracts = state::deployed_contracts(deps.storage, deployment_name.clone())
+        .change_context(Error::ChainContractsInfo)?;
+
+    Ok(Response::new()
+        .add_message(router.register_chain(
+            original_sender.clone(),
+            deployed_contracts.chain_name.clone(),
+            router_api::Address::from(deployed_contracts.gateway),
+            deployed_contracts.msg_id_format,
+        ))
+        .add_message(multisig.authorize_callers_from_proxy(
+            original_sender,
+            HashMap::from([(
+                deployed_contracts.multisig_prover.to_string(),
+                deployed_contracts.chain_name,
+            )]),
+        )
+    ))
+}
+```
 
 ## References
 
 Draft PR: https://github.com/axelarnetwork/axelar-amplifier/pull/843
+Coordinator v2.0.0 Release: https://github.com/axelarnetwork/axelar-amplifier/tree/coordinator-v2.0.0
   
 ## Changelog
 
@@ -388,3 +462,4 @@ Draft PR: https://github.com/axelarnetwork/axelar-amplifier/pull/843
 | 2025-05-05 | v1.1 | Solomon Davidson | Preliminary diagram designs |
 | 2025-05-12 | v1.2 | Solomon Davidson | Add pseudocode and chain registration design |
 | 2025-05-23 | v1.3 | Solomon Davidson | Incorperate multisig and rewards proposals. Reformatting |
+| 2025-08-13 | v1.4 | Solomon Davidson | Add details about registering a deployment |
