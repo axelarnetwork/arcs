@@ -55,7 +55,7 @@ Instantiating these contracts can be tedious, as they must each be provided with
 - **Operator**: Any account that has permission to instantiate a gateway, voting verifier and prover. Given a code id *n*, these accounts can be queried from the GRPC endpoint
 - **Coordinator Governance**: The governance account provided in the coordinator's instantiation message.
 - **Router Governance**: The governance account provided in the router's instantiation message.
-- **Deployment Name**: Human readable name for the instantiation of a gateway, voting verifier and multisig prover. Deployment names MUST unique. Deployment names SHOULD be similar to the intended chain name.
+- **Deployment Name**: Human readable name for the instantiation of a gateway, voting verifier and multisig prover. Deployment names MUST be unique. Deployment names SHOULD be similar to the intended chain name.
 - **Chain Name**: Human readable chain name that will be registered with the router.
 - **Salt**: Bytes provided to CosmWasm's Instantiate2 message to ensure predictable addressing. Salts MUST be unique to ensure contracts with the same bytecode are not given the same address (although, this is already enforced by the wasm module). Salts MAY be the same as the deployment name.
 
