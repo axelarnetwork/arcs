@@ -97,7 +97,7 @@ Coordinator Governance->>+Coordinator: RemoveOperators ([operator_address_1, ope
 
 ### 3. Contract Instantiation
 
-We first instantiate contracts in a separate step before we registering them. This ensures that:
+We first instantiate contracts in a separate step before registering them. This ensures that:
 1. Chain operators have the opportunity to correct configuration mistakes before registering their chain contracts with the protocol.
 2. Instantiation can be performed by authorized accounts without requiring a governance proposal.
 
