@@ -70,7 +70,6 @@ pub async fn consume_events(
     // ... other consume event logic
     match stream_status {
         StreamStatus::TimedOut => {
-            warn!("event stream timed out");
             monitoring_client
                 .metrics()
                 .record_metric(Msg::EventStreamTimeout);
