@@ -128,7 +128,7 @@ pub enum QueryMsg {
     #[returns(Empty)]
     ValidateAddress {
         address: Address,
-    }
+    },
     /// This query returns a digest for identifying the payload. This is what gets signed by the verifiers.
     /// It's called by the multisig-prover contract during proof construction.
     #[returns(HexBinary)]
