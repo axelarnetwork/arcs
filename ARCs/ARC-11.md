@@ -96,7 +96,7 @@ Note that the `MessageIdFormat` is not part of the new `chain-codec` interface, 
 ### Changes to Existing Contracts
 
 To support integrations like the XRPL integration, the multisig-prover contract will be updated to include a `payload: HexBinary` field in the `ConstructProof` message when compiled with a new `receive-payload` feature flag. This allows the relayer to pass the encoded payload bytes directly to the multisig-prover contract, which will then forward it to the `chain-codec` contract.
-Also, since the XRPL integration needs to write state during the proof construction, the `chain-codec` contract will provide a `NotifySigningSession` execute message that is called after the signing session was started. This message gets the full information about the 
+Also, since the XRPL integration needs to write state during the proof construction, the `chain-codec` contract will provide a `NotifySigningSession` execute message that is called after the signing session was started. This message gets the full information about the signing session, like the session ID, verifier set and the payload.
 
 The `multisig-prover` and `voting-verifier` contracts will be updated to query / call the `chain-codec` contract for the necessary transformations and validations instead of implementing them directly. This includes adding the `chain-codec` contract address to their `InstantiateMsg` and config.
 
