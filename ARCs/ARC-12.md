@@ -79,8 +79,6 @@ pub enum ExecuteMsg {
     #[permission(Elevated)]
     RegisterChain {
         chain_name: ChainName,
-        address_format: AddressFormat,
-        msg_id_format: MessageIdFormat,
         event_format: EventFormat,
     },
 }
@@ -107,6 +105,7 @@ pub struct EventId {
     // chain that emitted the event in question
     pub source_chain: ChainName,
     // transaction id where the event was emitted
+    // TODO: Add structure to this?
     pub transaction_id: String,
 }
 
@@ -159,10 +158,7 @@ pub struct EvmEvent {
 ### Integration with other amplifier contracts
 
 The event verifier will use the service registry to determine which verifiers support given chain. The existing chain names
-can be reused, which means all verifiers that support chain X for GMP also support chain X for event verification.
-Or new chain names could be used, to support different verifier sets. If new chain names are used, this could be abstracted
-away from the caller by retaining a mapping in the event verification contract from usual chain name to event verification specific
-chain name (i.e. use avalanche-events in the service registry, and map avalanche -> avalanche-events in the event verification contract)
+will be reused, which means all verifiers that support chain X for GMP also support chain X for event verification.
 
 ## Future Work
 
@@ -181,3 +177,4 @@ Chronological log of changes to this ARC.
 | 2025-07-16 | v1.0 | cjcobb23 | Add background and requirements | 
 | 2025-07-21 | v1.1 | cjcobb23 | Add API | 
 | 2025-08-01 | v1.2 | cjcobb23 | Update API | 
+| 2025-08-20 | v1.3 | cjcobb23 | Remove address_format and msg_id_format from RegisterChain | 
