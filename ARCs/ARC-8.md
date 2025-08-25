@@ -15,7 +15,7 @@
 
 -  **Created**: 2025-04-25
 
--  **Last Updated**: 2025-08-14
+-  **Last Updated**: 2025-08-25
 
 -  **Target Implementation**: Q2 2025
 
@@ -23,26 +23,29 @@
 
 ## Summary
 
-This ARC defines the requirements and design for the one-click deployment of blockchains to the Axelar network using the coordinator contract. The coordinator will be able to deploy the internal gateway, voting verifier and prover contracts for a particular blockchain from a single transaction.
-
-## Motivation
-
+This ARC defines the requirements and design for the one-click deployment of blockchains to the Axelar network using the coordinator contract. The coordinator will be able to deploy the internal gateway, voting verifier and prover contracts for a particular blockchain from a single transaction. A single governance proposal will then register these contracts with the protocol.
   
-### Background
+## Background
 
 When adding Amplifier support for a new blockchain on Axelar, the following three smart contracts that must be deployed for that blockchain:
 
 - **Internal Gateway:** When sending a message from a source chain to a destination chain, a relayer will submit the hash of that message to the source chain’s corresponding internal gateway.
 - **Voting Verifier:** Submitting a message hash to an internal gateway triggers a poll. Verifiers will then vote on whether or not that message succeeded on the source chain. The voting verifier contract manages these polls.
-- **Prover:** Messages that have been verified are ultimately routed to the destination chain’s internal gateway. The prover starts a process during which the verifiers for the destination chain sign the hash of each message. These signatures can be queried from the prover, and submitted to the destination chain to prove the existance of a message.
+- **Prover:** Messages that have been verified are ultimately routed to the destination chain’s internal gateway. The prover starts a process during which the verifiers for the destination chain sign the hash of each message. These signatures can be queried from the prover, and submitted to the destination chain to prove the existence of a message.
 
-Instantiating these contracts can be tedious, as they must each be provided with the correct interdependent parameters. Consequently, there are deployment scripts that automate this process. This project takes this a step further, and allows for each contract to be correctly instantiated from a single transaction. Once instantiated, these contracts can be registered with the router, and used for future message passing.
+Currently, registering a chain with the amplifier can be cumbersome, as it requires performing many independent steps. First, each of the three aforementioned contracts must be instantiated. Following that, the gateway must be registered with the router contract, and the prover must be registered with both the coordinator and the multisig contracts. This all accounts for several governance proposals, where each proposal must be supplied with the correct configuration parameters.
 
-## Requirements
+In order to make this process less tedious and error prone, we have deployment scripts that automate many of these steps. This ARC takes this a step further by integrating the steps for chain deployment into the amplifier.
+
+## Proposed
+
+ARC-8 proposes that a single transaction be used to instantiate all three amplifier contracts. Once instantiated, these contracts can be registered with the protocol using a single governance proposal, at which point they can be used for general message passing.
+
+### Requirements
 
 - **Dependency Resolution:** The coordinator must be able to resolve all dependencies between the gateway, voting verifier and prover. The user must only be responsible for supplying chain specific information that cannot be otherwise inferred. This includes the code IDs for each contract.
 
-- **Chain Name Uniqueness:** The router is responsible for directing messages between gateways. In order to ensure unambiguity, the router enforces that chain names are unique. The coordinator should not interfere with this process. This means:
+- **Chain Name Uniqueness:** The router is responsible for directing messages between gateways. In order to ensure lack of ambiguity, the router enforces that chain names are unique. The coordinator should not interfere with this process. This means:
     - A user cannot register contracts using a chain name that is already registered in the router.
     - A user should not be able to block chain names from being used in the future.
     
@@ -50,7 +53,7 @@ Instantiating these contracts can be tedious, as they must each be provided with
 
 - **Coordinator Instantiation Permission:** The coordinator contract address must have permission to instantiate contracts.
 
-## Definitions
+### Definitions
 
 - **Operator**: Any account that has permission to instantiate a gateway, voting verifier and prover. Given a code id *n*, these accounts can be queried from the GRPC endpoint
 - **Coordinator Governance**: The governance account provided in the coordinator's instantiation message.
@@ -59,110 +62,7 @@ Instantiating these contracts can be tedious, as they must each be provided with
 - **Chain Name**: Human readable chain name that will be registered with the router.
 - **Salt**: Bytes provided to CosmWasm's Instantiate2 message to ensure predictable addressing. Salts MUST be unique to ensure contracts with the same bytecode are not given the same address (although, this is already enforced by the wasm module). Salts MAY be the same as the deployment name.
 
-## One-Click Deployment Design
-
-### 1. Uploading Contracts
-
-The bytecode for the gateway, voting verifier and prover must first be stored on Axelar. This will be done using governance proposals.
-
-### 2. Managing Operators
-
-Operators can be registered with or removed from the coordinator. In order to avoid having an unecessary amount of proposals, multiple operators can be registered or removed with the same proposal.
-
-#### Register
-
-```mermaid
-sequenceDiagram
-autonumber
-actor Coordinator Governance
-box LightYellow Axelar
-participant Coordinator
-end
-
-Coordinator Governance->>+Coordinator: RegisterOperators ([operator_address_1, operator_address_2, ... ])
-```
-
-#### Remove
-
-```mermaid
-sequenceDiagram
-autonumber
-actor Coordinator Governance
-box LightYellow Axelar
-participant Coordinator
-end
-
-Coordinator Governance->>+Coordinator: RemoveOperators ([operator_address_1, operator_address_2, ... ])
-```
-
-### 3. Contract Instantiation
-
-We first instantiate contracts in a separate step before registering them. This ensures that:
-1. Chain operators have the opportunity to correct configuration mistakes before registering their chain contracts with the protocol.
-2. Instantiation can be performed by authorized accounts without requiring a governance proposal.
-
-```mermaid
-sequenceDiagram
-autonumber
-actor Coordinator Governance OR Operator
-participant WASM
-box LightYellow Axelar
-participant Coordinator
-participant Gateway
-participant Voting-Verifier
-participant Multisig-Prover
-end
-
-Coordinator Governance OR Operator->>+WASM: Query Gateway, Prover & Verifier Code IDs
-WASM->>+Coordinator Governance OR Operator: Respond with code IDs
-Coordinator Governance OR Operator->>+Coordinator Governance OR Operator: Construct deployment params using code IDs
-Coordinator Governance OR Operator->>+Coordinator: InstantiateChainContracts (deployment id, params, salt)
-Coordinator->>+Coordinator: Yes/No (Is deployment name available?)
-break Name is not available
- Coordinator-->Coordinator: Return Failure
-end
-Coordinator->>+Coordinator: Compute instantiate2 addresses using salt
-Coordinator->>+Gateway: Instantiate2 (params)
-Gateway->>+Coordinator: Respond with gateway address
-Coordinator->>+Voting-Verifier: Instantiate2 (params, gateway address)
-Voting-Verifier->>+Coordinator: Respond with verifier address
-Coordinator->>+Multisig-Prover: Instantiate2 (params, gateway address, verifier address)
-Multisig-Prover->>+Coordinator: Respond with prover address
-Coordinator->>+Coordinator: Store(key = deployment id, value = contract addresses)
-Coordinator->>+Coordinator Governance OR Operator: Event (contract addresses and code IDs)
-```
-
-### 4. Chain Registration
-
-A governance proposal registers the chain contracts with the protocol in this step.
-
-```mermaid
-sequenceDiagram
-autonumber
-actor Router Governance
-box LightYellow Axelar
-participant Coordinator
-participant Router
-participant Multisig
-end
-
-Router Governance->>+Coordinator: RegisterDeployment (deployment id)
-Coordinator->>+Router: Is chain name available?
-Router->>+Coordinator: Yes/No (Is chain name available?)
-break Chain name is not available
- Coordinator-->Router: Return Failure
-end
-Coordinator->>+Coordinator: (gateway address, verifier address, prover address) = Load(deployment id)
-Coordinator->>+Router: Register Chain (chain name, gateway address)
-Coordinator->>+Multisig: Authorize Callers (chain name, prover address)
-```
-
-<!-- May add the following later to the chain registration process -->
-<!-- participant Rewards -->
-<!-- Coordinator->>+Rewards: Create Pool(verifier rewards params, verifier address) -->
-<!-- Coordinator->>+Rewards: Create Pool(multisig rewards params, multisig address) -->
-
-## Types
+### Types
 
 The public interface for executing transactions on the coordinator is enhanced as follows.
 
@@ -171,7 +71,7 @@ pub enum ExecuteMsg {
     ...
 
     #[permission(Governance)]
-    RegisterOperators { operators: HashSet<Addr> },
+    AddOperators { operators: HashSet<Addr> },
 
     #[permission(Governance)]
     RemoveOperators { operators: HashSet<Addr> },
@@ -260,6 +160,109 @@ pub struct VerifierMsg {
 }
 ```
 
+## One-Click Deployment Design
+
+### 1. Uploading Contracts
+
+The bytecode for the gateway, voting verifier and prover must first be stored on Axelar. This will be done using governance proposals.
+
+### 2. Managing Operators
+
+Operators can be registered with or removed from the coordinator. In order to avoid having an unecessary amount of proposals, multiple operators can be registered or removed with the same proposal.
+
+#### Register
+
+```mermaid
+sequenceDiagram
+autonumber
+actor Coordinator Governance
+box LightYellow Axelar
+participant Coordinator
+end
+
+Coordinator Governance->>+Coordinator: RegisterOperators ([operator_address_1, operator_address_2, ... ])
+```
+
+#### Remove
+
+```mermaid
+sequenceDiagram
+autonumber
+actor Coordinator Governance
+box LightYellow Axelar
+participant Coordinator
+end
+
+Coordinator Governance->>+Coordinator: RemoveOperators ([operator_address_1, operator_address_2, ... ])
+```
+
+### 3. Contract Instantiation
+
+We first instantiate contracts in a separate step before registering them. This ensures that:
+1. Chain operators have the opportunity to correct configuration mistakes before registering their amplifier contracts with the protocol.
+2. Instantiation can be performed by authorized accounts without requiring a governance proposal.
+
+```mermaid
+sequenceDiagram
+autonumber
+actor Coordinator Governance OR Operator
+participant WASM
+box LightYellow Axelar
+participant Coordinator
+participant Gateway
+participant Voting-Verifier
+participant Multisig-Prover
+end
+
+Coordinator Governance OR Operator->>+WASM: Query Gateway, Prover & Verifier Code IDs
+WASM->>+Coordinator Governance OR Operator: Respond with code IDs
+Coordinator Governance OR Operator->>+Coordinator Governance OR Operator: Construct deployment params using code IDs
+Coordinator Governance OR Operator->>+Coordinator: InstantiateChainContracts (deployment id, params, salt)
+Coordinator->>+Coordinator: Yes/No (Is deployment name available?)
+break Name is not available
+ Coordinator-->Coordinator: Return Failure
+end
+Coordinator->>+Coordinator: Compute instantiate2 addresses using salt
+Coordinator->>+Gateway: Instantiate2 (params)
+Gateway->>+Coordinator: Respond with gateway address
+Coordinator->>+Voting-Verifier: Instantiate2 (params, gateway address)
+Voting-Verifier->>+Coordinator: Respond with verifier address
+Coordinator->>+Multisig-Prover: Instantiate2 (params, gateway address, verifier address)
+Multisig-Prover->>+Coordinator: Respond with prover address
+Coordinator->>+Coordinator: Store(key = deployment id, value = contract addresses)
+Coordinator->>+Coordinator Governance OR Operator: Event (contract addresses and code IDs)
+```
+
+### 4. Chain Registration
+
+A governance proposal registers the amplifier contracts with the protocol in this step.
+
+```mermaid
+sequenceDiagram
+autonumber
+actor Router Governance
+box LightYellow Axelar
+participant Coordinator
+participant Router
+participant Multisig
+end
+
+Router Governance->>+Coordinator: RegisterDeployment (deployment id)
+Coordinator->>+Router: Is chain name available?
+Router->>+Coordinator: Yes/No (Is chain name available?)
+break Chain name is not available
+ Coordinator-->Router: Return Failure
+end
+Coordinator->>+Coordinator: (gateway address, verifier address, prover address) = Load(deployment id)
+Coordinator->>+Router: Register Chain (chain name, gateway address)
+Coordinator->>+Multisig: Authorize Callers (chain name, prover address)
+```
+
+<!-- May add the following later to the chain registration process -->
+<!-- participant Rewards -->
+<!-- Coordinator->>+Rewards: Create Pool(verifier rewards params, verifier address) -->
+<!-- Coordinator->>+Rewards: Create Pool(multisig rewards params, multisig address) -->
+
 ## References
 
 Draft PR: https://github.com/axelarnetwork/axelar-amplifier/pull/843
@@ -275,3 +278,4 @@ Coordinator v2.0.0 Release: https://github.com/axelarnetwork/axelar-amplifier/tr
 | 2025-05-23 | v1.3 | Solomon Davidson | Incorperate multisig and rewards proposals. Reformatting |
 | 2025-08-13 | v1.4 | Solomon Davidson | Add details about registering a deployment |
 | 2025-08-14 | v1.5 | Solomon Davidson | Remove unecessary code |
+| 2025-08-25 | v1.6 | Solomon Davidson | Proposed section added and general reformatting|
