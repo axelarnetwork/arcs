@@ -96,47 +96,37 @@ pub enum QueryMsg {
 
 
 pub struct EventToVerify {
-    event_id: EventId,
+    source_chain: ChainName,
     event_data: EventData,
 }
 
-#[cw_serde]
-pub struct EventId {
-    // chain that emitted the event in question
-    pub source_chain: ChainName,
-    // transaction id where the event was emitted
-    // TODO: Add structure to this?
-    pub transaction_id: String,
-}
 
 ```
 
 #### Event Type
 
-The `Event` enum will be designed to support different event types across various blockchain networks.
+The `EventData` enum will be designed to support different event types across various blockchain networks.
 Each chain will have a specific format for events on the chain (they are not just arbitrary blobs).
 Adding structure here allows for better error handling, makes the API easier to call for the client
 (don't need to serialize the event to a blob), and easier parsing by ampd (don't need to convert from
-blob to chain specific event format).
+blob to chain specific event format). The contract itself will just accept a JSON string representation of the 
+`EventData` type, which ampd will deserialize. Callers can use the type to construct the JSON correctly,
+but the contract itself does not need to be upgraded or migrated to support new event types.
 
-
-New event formats will require a contract migration (code only).
 
 ```rust
-#[cw_serde]
-pub enum EventFormat {
-    Evm,
-    // additional variants for other blockchains can be added here
+pub enum EventData {
+    Evm (EvmEventData)
+    // Additional event variants for other blockchain types can be added here
 }
 
-pub enum EventData {
-    Evm {
-        // if present, verifies the transaction details
-        transaction_details: Option<EvmTransactionDetails>,
-        // verifies the presence of each event specified
-        events: Vec<EvmEvent>,
-    },
-    // Additional event variants for other blockchain types can be added here
+pub struct EvmEventData {
+    // hash of the transaction containing the event
+    transaction_id: HexBinary,
+    // if present, verifies the transaction details
+    transaction_details: Option<EvmTransactionDetails>,
+    // verifies the presence of each event specified
+    events: Vec<EvmEvent>,
 }
 
 pub struct EvmTransactionDetails {
@@ -160,14 +150,6 @@ pub struct EvmEvent {
 The event verifier will use the service registry to determine which verifiers support given chain. The existing chain names
 will be reused, which means all verifiers that support chain X for GMP also support chain X for event verification.
 
-## Future Work
-
-Potential planned follow-ups to this ARC.
-
-## References
-
-Citations or resources used in creating this ARC.
-
 ## Changelog
 
 Chronological log of changes to this ARC.
@@ -178,3 +160,4 @@ Chronological log of changes to this ARC.
 | 2025-07-21 | v1.1 | cjcobb23 | Add API | 
 | 2025-08-01 | v1.2 | cjcobb23 | Update API | 
 | 2025-08-20 | v1.3 | cjcobb23 | Remove address_format and msg_id_format from RegisterChain | 
+| 2025-09-08 | v1.4 | cjcobb23 | Clarify event_data JSON string parsed by ampd |
