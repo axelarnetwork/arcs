@@ -15,7 +15,7 @@
 
 -  **Created**: 2025-04-25
 
--  **Last Updated**: 2025-08-25
+-  **Last Updated**: 2025-09-30
 
 -  **Target Implementation**: Q2 2025
 
@@ -263,6 +263,56 @@ Coordinator->>+Multisig: Authorize Callers (chain name, prover address)
 <!-- Coordinator->>+Rewards: Create Pool(verifier rewards params, verifier address) -->
 <!-- Coordinator->>+Rewards: Create Pool(multisig rewards params, multisig address) -->
 
+## Synchronizing Prover-to-Chain Map
+
+Multisig v2.3 enforces that there is a 1-to-1 mapping between an authorized multisig prover and a chain. Multisig v2.1 does not enforce this constraint. This has unfortunately led to situations where the multisig maps multiple provers to a single chain. This results in the following state...
+
+**Before:** Multisig v2.1
+```
+Prover A <--> Chain A
+Prover B <--> Chain A
+Prover C <--> Chain C
+```
+
+There must be one prover per chain.
+
+**After:** Mulsitig v2.3
+```
+Prover A <--> Chain A
+Prover C <--> Chain C
+```
+
+### Things to Consider
+
+ Let `MAP_multisig` be the `prover -> chain` map stored in the `multisig`, and let `MAP_coordinator` be the `chain -> prover` map stored in the coordinator. While there are several queries and transactions that interact with both maps, `UpdateVerifierSet` is the only one that interacts with both simultaneously.:
+
+UpdateVerifierSet -> **Prover** -> ...
+- start_signing_session -> **Multisig** -> MAP_multisig
+- set_active_verifiers -> **Coordinator** -> MAP_coordinator
+
+For `UpdateVerifierSet` to succeed, the prover/chain mapping must exist in both `MAP_multisig` and `MAP_coordinator`. Prior to ARC-8, both `MAP_multisig` and `MAP_coordinator` were updated independently.
+
+### Implications
+1. Provers removed from `MAP_multisig` will no longer be able to start signing sessions.
+2. Provers removed from `MAP_coordinator` will not be able to update active verifiers for a given chain. The service registry uses the coordinator to check if a verifier is ready to unbond.
+
+### Proposal
+  1.  First migrate the multisig. Multisig will select which prover to use in the following way:
+        1. If there is only one option, choose that prover
+        1. If there are multiple options for prover, choose the one provided in the migration message
+        1. If there are multiple options for prover, but one has not been specified in the migration message, choose the prover arbitrarily (first one).
+
+        **Warning**: Although new signing sessions cannot be created, proofs from old signing sessions can still be queried from old provers.
+
+
+  1.  When migrating the coordinator, update `MAP_coordinator` so that it aligns with `MAP_multisig`. In other words, if `MAP_coordinator` differs from `MAP_multisig` on any prover/chain pair, use the pair from `MAP_multisig`. This is done by default when using the coordinator migration script.
+
+Please refer to the migration document for Coordinator v2.1 for more information.
+
+### Future Work
+
+I recommend that multisig update map on coordinator whenever `AuthorizedCallers` is called.
+
 ## References
 
 Draft PR: https://github.com/axelarnetwork/axelar-amplifier/pull/843
@@ -279,3 +329,4 @@ Coordinator v2.0.0 Release: https://github.com/axelarnetwork/axelar-amplifier/tr
 | 2025-08-13 | v1.4 | Solomon Davidson | Add details about registering a deployment |
 | 2025-08-14 | v1.5 | Solomon Davidson | Remove unecessary code |
 | 2025-08-25 | v1.6 | Solomon Davidson | Proposed section added and general reformatting|
+| 2025-09-30 | v1.7 | Solomon Davidson | Add section about synchronizing prover-to-chain map|
