@@ -1,4 +1,4 @@
-# ARC-12: Rewards Contract Reconfiguration with off-chain rewards computation
+# ARC-12: Record participation batched variant
 
 ## Metadata
 
@@ -12,119 +12,134 @@
 
 ## Summary
 
-This ARC proposes to:
-1. Introduce a batched participation API in `rewards` to record multiple verifiers for a single event in one call (fixing the TODO in `voting-verifier`).
-2. Decommission on-chain epoch payouts (`rewards_per_epoch`) and switch to a monthly, off-chain payout based on a per-verifier base fee (cost) plus up to 40% profit at full participation, with AXL/USD conversion at payout time.
-3. Keep the `rewards` contract as the source of truth for participation only (record + query), while payouts are executed off-chain once per month.
+Current systems often have the Voting Verifier call the Rewards contract repeatedly — one call per participation vote. This causes multiple cross-contract calls inside a single larger operation, increasing gas and external call overhead. This proposal replaces repeated inter-contract calls with a single batched call that processes many participation records in one atomic transaction.
 
 ## Background and Motivation
 
-### AXL Price Risk (denomination vs. economics)
-- Rewards are denominated in AXL, but costs and targets are in USD.
-  - If AXL price rises: validators earn more USD, integrator’s fixed USD converts to fewer tokens, Axelar’s AXL budget buys more USD than intended.
-  - If AXL price falls: validators earn less USD than targeted, integrator’s USD converts to more AXL yet may still not meet USD operating costs.
+In the current system, the Voting Verifier contract iterates over every participation event and calls the Rewards contract separately for each participant.
+Each of these calls:
 
-### Current limitations
-- The on-chain model pays per epoch with a fixed `rewards_per_epoch` and pushes transfers, creating fan-out and price-misalignment risks.
-- `voting-verifier` issues one `RecordParticipation` per consensus participant; batching would reduce gas and latency.
+Triggers a full CosmWasm sub-message execution (submsg_execute), which incurs:
+- Storage access overhead (SLOAD/SSTORE equivalents in CosmWasm),
+- Context setup and teardown per call,
+- Cross-contract serialization/deserialization of JSON/Binary payloads,
+- Event emission costs per message.
 
-## Proposed Solution Design
+Is individually gas-metered and billed in the Cosmos SDK runtime, meaning each call multiplies the per-message execution cost.
 
-### High level
-- Remove on-chain `rewards_per_epoch` budgeting and token pushes.
-- Keep on-chain participation accounting (events → per-epoch tallies per pool).
-- Once per month, an off-chain job aggregates on-chain participation, applies a proportional per-epoch payout against a monthly cap (`base_fee_usd * 1.40` at 100% participation), converts to AXL using price at payout, and pays out.
+As the number of participants (N) increases, total gas grows roughly linearly with N, dominated by repeated cross-contract message costs — even when the logic per participation is trivial.
 
-### Contract: interface changes (backward-compatible)
-- Add a new execute to `rewards`:
-  - `RecordParticipationBatch { chain_name, event_id, verifiers: Vec<String> }`
-    - Behaves like `RecordParticipation`, but accepts a list of verifier addresses.
-    - The pool is still derived from `info.sender` to prevent spoofing across pools.
-- Keep existing executes for compatibility (`RecordParticipation`, `AddRewards`, etc.), but deprecate payout-related usage in favor of off-chain payouts.
+This structure causes:
+- Wasted gas due to redundant contract entry overheads (deps, env, and message deserialization every time).
+- Increased operational cost for validators and users submitting these votes.
+- Reduced atomicity guarantees, since partial execution failure after a few successful sub-calls can lead to inconsistent recorded states (unless wrapped manually in rollback-safe logic).
 
-### Contract: responsibilities after change
-- Source of truth for participation only:
-  - Continue recording events into per-epoch tallies (per `PoolId = (chain_name, contract)`).
-  - Provide queries to fetch participation for a given epoch or range.
-- No on-chain token distribution or `rewards_per_epoch` logic.
+## Requirements
+### Functional Requirements
 
-### Off-chain payout (monthly)
-1. Snapshot participation data for the month from the `rewards` contract (all pools, all epochs finishing in the month).
-2. For each pool and verifier, compute per-epoch participation ratio = participated_e / required_per_epoch and pay proportionally (no curve/scaling).
-3. Define a per-verifier base fee in USD that reflects their cost: `base_fee_usd`. Set a profit cap at full participation: `profit_cap = 0.40` (40%).
-4. Compute the total USD cap per verifier for the month at 100% participation: `total_usd_cap = base_fee_usd * (1 + profit_cap)`.
-5. Convert to AXL using price at payout time: `total_axl_cap = total_usd_cap / axl_price_usd`. Split equally across the epochs in the month: `base_axl_per_epoch = total_axl_cap / E`, where `E` is the number of epochs included in the month.
-6. For each epoch `e`, pay `payout_e = base_axl_per_epoch × (participated_e / required_per_epoch)`. Sum across epochs to obtain the final AXL payout per verifier. This proportionally scales both cost recovery and profit based on delivered participation.
+#### Single-Call Operation
+The Voting Verifier must be able to submit all participation records for a given epoch in one ExecuteMsg::RecordParticipationBatch call.
+All participation records in a batch must be processed atomically — either all succeed, or the entire transaction reverts.
 
-#### Payout computation (off-chain)
-- Inputs (per pool, per month):
-  - Verifier base fee (USD): `base_fee_usd`
-  - Profit cap at full participation: `profit_cap = 0.40`
-  - AXL/USD price at payout: `axl_price_usd` (spot or TWAP)
-  - Number of epochs in month: `E`
-  - For each epoch `e`: `participated_e` and `required_per_epoch` (e.g., 7/10)
-- Computation:
-  - `total_usd_cap = base_fee_usd * (1 + profit_cap)`
-  - `total_axl_cap = total_usd_cap / axl_price_usd`
-  - `base_axl_per_epoch = total_axl_cap / E`
-  - `payout_e = base_axl_per_epoch × (participated_e / required_per_epoch)`
-  - `total_axl = Σ_e payout_e`
-  - Round at the end (e.g., 6 decimals): `final_axl = floor(total_axl * 1e6) / 1e6`
-- One-line formula: `total_axl = Σ_e [ (base_fee_usd * (1 + profit_cap) / axl_price_usd) / E × (participated_e / required_per_epoch) ]`
+#### Backward Compatibility
+- The existing RecordParticipation message (single record submission) must remain available for legacy contracts and off-chain scripts.
+- The batch function must internally reuse the same logic path to guarantee consistent validation and reward calculations.
 
-## Changes to Existing Contracts
+#### Data Validation
+- Each ParticipationRecord must be validated for:
+- Non-empty participant address,
+- Matching epoch ID with the current verifier context,
+- Non-zero weight or stake contribution,
+- No duplicate participant entries within the same batch.
+- Invalid inputs must trigger a revert of the entire batch.
 
-### Rewards
-- New execute (batch): `RecordParticipationBatch { chain_name, event_id, verifiers }`.
-- New query helpers (optional):
-  - `MonthlyParticipation { pool_id, month } -> { per_verifier_counts, total_events }`.
-  - Or reuse existing epoch participation queries and aggregate off-chain.
-- Remove reliance on `rewards_per_epoch` for economics; do not send tokens on-chain.
+#### Consistent State Updates
+- Rewards distribution, epoch counters, and validator effort metrics must be updated in a single, consistent state change.
+- Intermediate partial updates must not persist in storage if any record fails validation.
 
-### Voting-Verifier
-- Replace multiple single-recipient `RecordParticipation` messages with one `RecordParticipationBatch` per finished poll.
+## Design
 
-### Multisig
-- No interface change required; may optionally batch if multiple signatures are submitted at once.
+### Old Function Signature
+```rust
+RecordParticipation {
+    chain_name: ChainName,
+    event_id: nonempty::String,
+    verifier_address: String,
+}
+```
 
-## Data and Computation Model
+Functionality:
+- Records a single verifier’s participation for a specific event.
+- The Voting Verifier must call this once per verifier, resulting in multiple WASM executions for multiple participants.
+- Each call triggers storage reads/writes and emits events per verifier.
+- Atomicity is per call; partial failures cannot be consolidated.
 
-- Participation storage (unchanged):
-  - `TALLIES[(PoolId, epoch)] -> { event_count, participation: { verifier -> count }, params_at_epoch }`.
-  - `EVENTS[(event_id, PoolId)]` for deduplication.
-- Off-chain aggregation:
-  - Sum per-verifier votes and total events across the epochs that fall in the monthly window.
-  - Compute per-verifier ratio = votes / total_events.
-  - Apply proportional per-epoch weighting as defined in “Off-chain payout (monthly)”.
-  - Convert USD cap derived from `base_fee_usd` and profit cap to AXL using price at payout.
+```mermaid
+sequenceDiagram
+participant Rewards
+participant VotingVerifier
+participant Verifier
+participant Gateway
+participant Relayer
 
-## Backward Compatibility and Migration
+Relayer ->> Gateway: VerifyMessages
+Gateway ->> VotingVerifier: VerifyMessages
+Verifier ->> VotingVerifier: Vote
+Relayer ->> VotingVerifier: EndPoll
+loop For each validator who voted correctly
+Verifier ->> Rewards: RecordParticipation
+end
+Verifier ->> VotingVerifier: Vote
+opt If voted within grace period and voted correctly
+VotingVerifier ->> Rewards: RecordParticipation
+end
+```
 
-- Keep existing participation APIs; add batch variant.
-- Deprecate on-chain payouts and any monitors relying on `rewards_per_epoch` value.
-- No state migration needed beyond the new execute and optional queries.
+### New Function Signature
+```rust
+RecordParticipationBatch {
+    chain_name: ChainName,
+    event_id: nonempty::String,
+    verifier_addresses: Vec<String>,
+}
+```
 
-## Advantages & Disadvantages
+Functionality Changes:
+- Allows recording multiple verifiers for the same event in a single call.
+- Voting Verifier collects verifier addresses and calls once per event instead of looping over single calls.
+- Internal batch processing in the Rewards contract:
+- Validate that the pool exists.
+- Deduplicate verifier addresses within the batch.
+- Update participation counts and relevant state for all verifiers.
+- Entire batch is processed atomically — either all succeed or revert.
+- Single-record calls remain compatible, internally routed to batch logic if desired.
 
-### Advantages
-- USD-anchored outcomes: aligns validator income with base costs plus capped profit, independent of AXL volatility.
-- Operational simplicity: one monthly payout run, fewer on-chain fan-out transactions.
-- Gas reduction: batched participation recording.
+```mermaid
+sequenceDiagram
+participant Rewards
+participant VotingVerifier
+participant Verifier
+participant Gateway
+participant Relayer
 
-### Disadvantages
-- Off-chain dependency for payouts and pricing (oracle/feed management, reconciliation).
-- Additional operational runbooks and monitoring for monthly payouts.
-
-## Open Questions
-- Price source (oracle, etc), snapshot time, and fallback in case of missing data.
-- Exact definition of “verifier expectations” and per-verifier base fee inputs (by chain).
-- Whether to expose monthly aggregation via contract queries or leave entirely to off-chain.
-- Handling of proxy addresses for payouts off-chain (mirror on-chain proxy semantics?).
+Relayer ->> Gateway: VerifyMessages
+Gateway ->> VotingVerifier: VerifyMessages
+Verifier ->> VotingVerifier: Vote
+Relayer ->> VotingVerifier: EndPoll
+Verifier ->> Rewards: RecordParticipationBatch
+loop For each validator who voted correctly
+Rewards ->> Rewards: RecordParticipation
+end
+Verifier ->> VotingVerifier: Vote
+opt If voted within grace period and voted correctly
+VotingVerifier ->> Rewards: RecordParticipation
+end
+```
 
 ## References
 
-- Rewards participation storage and APIs in the `rewards` contract.
-- Voting-Verifier poll completion flow and current per-verifier `RecordParticipation` messages.
+- Rewards participation storage and APIs in the `rewards` contract. https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards
+- Voting-Verifier poll completion flow and current per-verifier `RecordParticipation` messages. https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/voting-verifier
 
 ## Changelog
 
