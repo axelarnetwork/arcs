@@ -12,7 +12,7 @@
 
 ## Summary
 
-Current systems often have the Voting Verifier call the Rewards contract repeatedly — one call per participation vote. This causes multiple cross-contract calls inside a single larger operation, increasing gas and external call overhead. This proposal replaces repeated inter-contract calls with a single batched call that processes many participation records in one atomic transaction.
+Current system has the Voting Verifier call the Rewards contract repeatedly — one call per participation vote. This causes multiple cross-contract calls inside a single larger operation, increasing gas and external call overhead. This proposal replaces repeated inter-contract calls with a single batched call that processes many participation records in one atomic transaction.
 
 ## Background and Motivation
 
