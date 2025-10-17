@@ -1,4 +1,4 @@
-# ARC-12: Record participation batched variant
+# ARC-12: Record participation batched variant in Rewards contract
 
 ## Metadata
 
@@ -12,7 +12,7 @@
 
 ## Summary
 
-Current system has the Voting Verifier call the Rewards contract repeatedly — one call per participation vote. This causes multiple cross-contract calls inside a single larger operation, increasing gas and external call overhead. This proposal replaces repeated inter-contract calls with a single batched call that processes many participation records in one atomic transaction.
+Current system has the Voting Verifier call the Rewards contract [repeatedly](https://github.com/axelarnetwork/axelar-amplifier/blob/6325dae5dbd39e2891788553e131f8b3f42385b0/contracts/voting-verifier/src/contract/execute.rs#L292-L293) — one call per participation vote. This causes multiple cross-contract calls inside a single larger operation, increasing gas and external call overhead. This proposal replaces repeated inter-contract calls with a single batched call that processes many participation records in one atomic transaction.
 
 ## Background and Motivation
 
@@ -20,10 +20,10 @@ In the current system, the Voting Verifier contract iterates over every particip
 Each of these calls:
 
 Triggers a full CosmWasm sub-message execution (submsg_execute), which incurs:
-- Storage access overhead (SLOAD/SSTORE equivalents in CosmWasm),
-- Context setup and teardown per call,
-- Cross-contract serialization/deserialization of JSON/Binary payloads,
-- Event emission costs per message.
+- Storage access overhead (SLOAD/SSTORE equivalents in CosmWasm)
+- Context setup and teardown per call
+- Cross-contract serialization/deserialization of JSON/Binary payloads
+- Event emission costs per message
 
 Is individually gas-metered and billed in the Cosmos SDK runtime, meaning each call multiplies the per-message execution cost.
 
