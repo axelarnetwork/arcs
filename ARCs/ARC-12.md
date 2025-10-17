@@ -118,16 +118,23 @@ sequenceDiagram
     participant Gateway
     participant VotingVerifier
     participant Rewards
-
     Relayer ->> Gateway: VerifyMessages
     Gateway ->> VotingVerifier: VerifyMessages
-    loop For each verifier
-        VotingVerifier ->> VotingVerifier: Vote
+    loop During poll
+        VotingVerifier ->> VotingVerifier: Record each verifier's vote
     end
     Relayer ->> VotingVerifier: EndPoll
-    Note over VotingVerifier,Rewards: Submit batched participation records
+    Note over VotingVerifier: Build verifier_addresses[] for this (chain_name, event_id)
     VotingVerifier ->> Rewards: RecordParticipationBatch(chain_name, event_id, verifier_addresses[])
-    Note over Rewards: Validate all records and update state atomically
+    activate Rewards
+    Note over Rewards: Validate: non-empty addrs • unique addrs • correct context • non-zero weight
+    alt All validations pass
+        Rewards ->> Rewards: Update participation & state atomically
+        Rewards -->> VotingVerifier: OK (batch recorded)
+    else Any validation fails
+        Rewards -->> VotingVerifier: ERROR (revert; no state changes)
+    end
+    deactivate Rewards
 ```
 
 ## References
