@@ -6,60 +6,55 @@
 - **Author(s)**: Ayush Tiwari
 - **Category**: Amplifier Protocol
 - **Status**: Draft
-- **Created**: 2025-10-16
-- **Last Updated**: 2025-10-16
+- **Created**: 2025‑10‑16
+- **Last Updated**: 2025‑10‑17
 - **Target Implementation**: Q4 2025
 
 ## Summary
 
-Current system has the Voting Verifier call the Rewards contract [repeatedly](https://github.com/axelarnetwork/axelar-amplifier/blob/6325dae5dbd39e2891788553e131f8b3f42385b0/contracts/voting-verifier/src/contract/execute.rs#L292-L293) — one call per participation vote. This causes multiple cross-contract calls inside a single larger operation, increasing gas and external call overhead. This proposal replaces repeated inter-contract calls with a single batched call that processes many participation records in one atomic transaction.
+The current system requires the Voting Verifier contract to call the Rewards contract once per verifier, incurring repeated sub‑message execution costs and increased gas usage. Each participation vote triggers its own contract invocation, which means the storage, context and serialization overheads are paid many times in a single poll. This proposal replaces those repeated calls with a single batched call that processes many participation records in one atomic transaction, reducing overhead and ensuring consistent state updates.
 
 ## Background and Motivation
 
-In the current system, the Voting Verifier contract iterates over every participation event and calls the Rewards contract separately for each participant.
-Each of these calls:
+In the existing flow, the Voting Verifier iterates over every participation event and calls the Rewards contract separately for each participant. Each of these calls:
 
-Triggers a full CosmWasm sub-message execution (submsg_execute), which incurs:
-- Storage access overhead (SLOAD/SSTORE equivalents in CosmWasm)
-- Context setup and teardown per call
-- Cross-contract serialization/deserialization of JSON/Binary payloads
-- Event emission costs per message
+- Triggers a full CosmWasm sub‑message execution (`submsg_execute`), incurring storage access, context setup/teardown, serialization and event emission costs.
+- Is gas‑metered independently, so the per‑message execution cost is multiplied by the number of participants.
 
-Is individually gas-metered and billed in the Cosmos SDK runtime, meaning each call multiplies the per-message execution cost.
-
-As the number of participants (N) increases, total gas grows roughly linearly with N, dominated by repeated cross-contract message costs — even when the logic per participation is trivial.
-
-This structure causes:
-- Wasted gas due to redundant contract entry overheads (deps, env, and message deserialization every time).
-- Increased operational cost for validators and users submitting these votes.
-- Reduced atomicity guarantees, since partial execution failure after a few successful sub-calls can lead to inconsistent recorded states (unless wrapped manually in rollback-safe logic).
+As the number of participants ( _N_ ) increases, the total gas usage grows roughly linearly with _N_, dominated by cross‑contract message costs. The repeated overhead wastes gas, increases operational cost for validators and users, and diminishes atomicity because partial failures can leave the system in an inconsistent state unless manually rolled back. A single batched call can eliminate redundant overhead and provide all‑or‑nothing semantics.
 
 ## Requirements
+
 ### Functional Requirements
 
-#### Single-Call Operation
-The Voting Verifier must be able to submit all participation records for a given epoch in one ExecuteMsg::RecordParticipationBatch call.
-All participation records in a batch must be processed atomically — either all succeed, or the entire transaction reverts.
+#### Single‑Call Operation
+
+The Voting Verifier must be able to submit all participation records for a given event in one `ExecuteMsg::RecordParticipationBatch` call. All participation records in a batch must be processed atomically — either all succeed, or the entire transaction reverts.
 
 #### Backward Compatibility
-- The existing RecordParticipation message (single record submission) must remain available for legacy contracts and off-chain scripts.
-- The batch function must internally reuse the same logic path to guarantee consistent validation and reward calculations.
+
+- The existing `RecordParticipation` message (single record submission) must remain available for legacy contracts and off‑chain scripts.
+- The batch function must internally reuse the same validation and reward‑calculation logic to guarantee consistent behaviour.
 
 #### Data Validation
-- Each ParticipationRecord must be validated for:
-- Non-empty participant address,
-- Matching epoch ID with the current verifier context,
-- Non-zero weight or stake contribution,
-- No duplicate participant entries within the same batch.
-- Invalid inputs must trigger a revert of the entire batch.
+
+Each `ParticipationRecord` in the batch must be validated for:
+
+- Non‑empty participant address.
+- Matching `event_id` and `chain_name` with the current verifier context.
+- Non‑zero weight or stake contribution.
+- No duplicate participant entries within the same batch — duplicates **must** cause the batch to revert.
+
+Invalid inputs must trigger a revert of the entire batch.
 
 #### Consistent State Updates
-- Rewards distribution, epoch counters, and validator effort metrics must be updated in a single, consistent state change.
-- Intermediate partial updates must not persist in storage if any record fails validation.
+
+Rewards distribution, event counters and validator effort metrics must be updated in a single, consistent state change. Intermediate partial updates must not persist in storage if any record fails validation.
 
 ## Design
 
 ### Old Function Signature
+
 ```rust
 RecordParticipation {
     chain_name: ChainName,
@@ -68,34 +63,34 @@ RecordParticipation {
 }
 ```
 
-Functionality:
-- Records a single verifier’s participation for a specific event.
+**Functionality:**
+
+- Records a single verifier's participation for a specific event.
 - The Voting Verifier must call this once per verifier, resulting in multiple WASM executions for multiple participants.
 - Each call triggers storage reads/writes and emits events per verifier.
 - Atomicity is per call; partial failures cannot be consolidated.
 
 ```mermaid
 sequenceDiagram
-participant Rewards
-participant VotingVerifier
-participant Verifier
-participant Gateway
-participant Relayer
+    participant Relayer
+    participant Gateway
+    participant VotingVerifier
+    participant Rewards
 
-Relayer ->> Gateway: VerifyMessages
-Gateway ->> VotingVerifier: VerifyMessages
-Verifier ->> VotingVerifier: Vote
-Relayer ->> VotingVerifier: EndPoll
-loop For each validator who voted correctly
-Verifier ->> Rewards: RecordParticipation
-end
-Verifier ->> VotingVerifier: Vote
-opt If voted within grace period and voted correctly
-VotingVerifier ->> Rewards: RecordParticipation
-end
+    Relayer ->> Gateway: VerifyMessages
+    Gateway ->> VotingVerifier: VerifyMessages
+    loop For each verifier
+        VotingVerifier ->> VotingVerifier: Vote
+    end
+    Relayer ->> VotingVerifier: EndPoll
+    %% Single‑verifier submission during grace period
+    alt Grace period vote
+        VotingVerifier ->> Rewards: RecordParticipation
+    end
 ```
 
 ### New Function Signature
+
 ```rust
 RecordParticipationBatch {
     chain_name: ChainName,
@@ -104,45 +99,44 @@ RecordParticipationBatch {
 }
 ```
 
-Functionality Changes:
+**Functionality Changes:**
+
 - Allows recording multiple verifiers for the same event in a single call.
-- Voting Verifier collects verifier addresses and calls once per event instead of looping over single calls.
+- The Voting Verifier collects verifier addresses and submits them once per event instead of looping over single calls.
 - Internal batch processing in the Rewards contract:
-- Validate that the pool exists.
-- Deduplicate verifier addresses within the batch.
-- Update participation counts and relevant state for all verifiers.
-- Entire batch is processed atomically — either all succeed or revert.
-- Single-record calls remain compatible, internally routed to batch logic if desired.
+
+  - Validate that the rewards pool exists for the given `chain_name` and `event_id`.
+  - Check for duplicate verifier addresses; if any duplicates are detected, revert the entire call.
+  - Validate each record (non‑empty address, correct event context, non‑zero weight) and update participation counts and other state fields atomically.
+
+- The entire batch is processed atomically — either all succeed or the transaction reverts.
+- Single‑record calls remain compatible and are internally routed through the same validation logic.
 
 ```mermaid
 sequenceDiagram
-participant Rewards
-participant VotingVerifier
-participant Verifier
-participant Gateway
-participant Relayer
+    participant Relayer
+    participant Gateway
+    participant VotingVerifier
+    participant Rewards
 
-Relayer ->> Gateway: VerifyMessages
-Gateway ->> VotingVerifier: VerifyMessages
-Verifier ->> VotingVerifier: Vote
-Relayer ->> VotingVerifier: EndPoll
-Verifier ->> Rewards: RecordParticipationBatch
-loop For each validator who voted correctly
-Rewards ->> Rewards: RecordParticipation
-end
-Verifier ->> VotingVerifier: Vote
-opt If voted within grace period and voted correctly
-VotingVerifier ->> Rewards: RecordParticipation
-end
+    Relayer ->> Gateway: VerifyMessages
+    Gateway ->> VotingVerifier: VerifyMessages
+    loop For each verifier
+        VotingVerifier ->> VotingVerifier: Vote
+    end
+    Relayer ->> VotingVerifier: EndPoll
+    Note over VotingVerifier,Rewards: Submit batched participation records
+    VotingVerifier ->> Rewards: RecordParticipationBatch(chain_name, event_id, verifier_addresses[])
+    Note over Rewards: Validate all records and update state atomically
 ```
 
 ## References
 
-- Rewards participation storage and APIs in the `rewards` contract. https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards
-- Voting-Verifier poll completion flow and current per-verifier `RecordParticipation` messages. https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/voting-verifier
+- Rewards participation storage and APIs in the `rewards` contract: [https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards](https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards)
+- Voting‑Verifier poll completion flow and current per‑verifier `RecordParticipation` messages: [https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/voting-verifier](https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/voting-verifier)
 
 ## Changelog
 
-|  Date       | Revision | Author       | Description   |
-|-------------|----------|--------------|---------------|
-| 2025-10-16  | v1.0     | Ayush Tiwari | Initial draft |
+| Date       | Revision | Author       | Description   |
+| ---------- | -------- | ------------ | ------------- |
+| 2025‑10‑16 | v1.0     | Ayush Tiwari | Initial draft |
