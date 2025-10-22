@@ -54,8 +54,7 @@ The Interchain Token Service should migrate to the Currency Standard for several
 
 The migration introduces parallel function paths rather than replacing existing ones, ensuring zero disruption to currently registered tokens while enabling new registrations to use the Currency Standard. All new functions are additions, not replacements, and legacy code paths remain untouched and fully supported.
 
-[DIAGRAM]
-*Suggested diagram: High-level architecture showing dual registration paths (legacy CoinMetadata<T> and new Currency<T>) converging into the ITS registry*
+[DIAGRAM]*Suggested diagram: High-level architecture showing dual registration paths (legacy CoinMetadata<T> and new Currency<T>) converging into the ITS registry*[/DIAGRAM]
 
 ### Module Changes
 
@@ -157,9 +156,6 @@ public(package) fun register_coin_from_currency<T>(
     self.register_coin(coin_info, coin_management, true)
 }
 ```
-
-[DIAGRAM]
-*Suggested diagram: Sequence diagram showing the flow from register_coin_from_currency through metadata extraction to final registration*
 
 **4.2 `register_custom_coin_from_currency<T>`**
 
