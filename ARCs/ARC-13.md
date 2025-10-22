@@ -7,7 +7,7 @@
 - **Category**: Amplifier Protocol
 - **Status**: Draft
 - **Created**: 2025-10-17
-- **Last Updated**: 2025-10-17
+- **Last Updated**: 2025-10-22
 - **Target Implementation**: Q4 2025
 
 ## Summary
@@ -45,8 +45,11 @@ The function implementation can use `axl_price_distribution_cycle` to calculate 
 
 ## Requirements
 
-- AXL price should be calculated using volume weighted average pricing of AXL during the start and end timestamp of the distribution cycle
+- AXL price should be calculated using **Volume Weighted Average Price (VWAP)** during the distribution cycle period.  
+    - Using VWAP helps smooth out short-term price volatility and provides a fairer average price by weighting each trade by its volume, ensuring that periods of high trading activity have more influence on the calculated AXL price. This prevents manipulation or outlier trades from disproportionately impacting rewards payouts.
+    - VWAP formula: `VWAP = Σ(Typical_Price × Volume) / Σ(Volume)` where `Typical_Price = (High + Low + Close) / 3`
 - Function permission needs to be elevated since `axl_price_distribution_cycle` is sensitive for the actual payout
+- Include outlier protection to filter prices deviating >20% from median
 
 ## Future Work
 
@@ -55,6 +58,8 @@ The function implementation can use `axl_price_distribution_cycle` to calculate 
 ## References
 
 - Rewards participation storage and APIs in the `rewards` contract: [https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards](https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards)
+- VWAP Formula and Implementation: [Volume Weighted Average Price - WallStreetMojo](https://www.wallstreetmojo.com/volume-weighted-average-price/)
+- VWAP Trading Strategy Guide: [VWAP Tutorial - QuantInsti](https://blog.quantinsti.com/vwap-strategy/)
 ## Changelog
 
 Chronological log of changes to this ARC.
