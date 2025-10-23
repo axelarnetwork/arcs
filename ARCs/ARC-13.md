@@ -43,11 +43,64 @@ DistributeRewards {
 
 The function implementation can use `axl_price_distribution_cycle` to calculate `reward_per_epoch` in AXL.
 
+### Example Scenarios
+
+#### Scenario 1: AXL Price Volatility Impact Over Time
+```rust
+// Chain added in January 2025
+let chain_addition_date = "2025-01-15";
+let axl_price_at_addition = 0.15; // AXL price when chain was added
+
+// Pool configuration (example values)
+let monthly_infra_cost_per_verifier = 1000; // USD (assumption)
+let verifier_profit_percent = 0.40; // 40% profit on infra cost 
+let number_of_verifiers = 30; // (assumption)
+let number_of_pools = 2; // (one for voting verifier another for multisig)
+let number_of_epochs_in_a_month = 30; // 30 days (calculated, 1 epoch = 1 day)
+
+// Current system: Fixed reward calculation at chain addition
+// Total compensation = infra_cost + (infra_cost * profit_percent) = 1000 + (1000 * 0.40) = 1400 USD
+let fixed_reward_per_epoch = (1400 * 30) / (2 * 30 * 0.15) = 4666.667 AXL = 700 USD
+
+// Problem: AXL price changes over time
+// March 2025: AXL price = 0.25 (67% increase from Jan)
+// May 2025: AXL price = 0.10 (33% decrease from Jan)
+// July 2025: AXL price = 0.30 (100% increase from Jan)
+
+// Result: Verifiers receive same AXL amount but USD value fluctuates dramatically
+// March: 4666.667 AXL = $1166.667 USD (vs intended $700 USD)
+// May: 4666.667 AXL = $466.667 USD (vs intended $700 USD)  
+// July: 4666.667 AXL = $1400 USD (vs intended $700 USD)
+```
+
+#### Scenario 2: New System with USD-Denominated Rewards
+```rust
+// Same pool configuration
+let monthly_infra_cost_per_verifier = 1000; // USD (assumption)
+let verifier_profit_percent = 0.40; // 40% profit on infra cost 
+let number_of_verifiers = 30; // (assumption)
+let number_of_pools = 2; // (one for voting verifier another for multisig)
+let number_of_epochs_in_a_month = 30; // 30 days (calculated, 1 epoch = 1 day)
+
+// Current system: Fixed reward calculation at chain addition
+// Total compensation = infra_cost + (infra_cost * profit_percent) = 1000 + (1000 * 0.40) = 1400 USD
+let fixed_reward_per_epoch = (1400 * 30) / (2 * 30) = 700 USD per epoch
+
+// At distribution time, convert to AXL using current VWAP
+// March 2025: AXL VWAP = 0.25, AXL reward = 700 / 0.25 = 2800 AXL
+// May 2025: AXL VWAP = 0.10, AXL reward = 700 / 0.10 = 7000 AXL
+// July 2025: AXL VWAP = 0.30, AXL reward = 700 / 0.30 = 2333.332 AXL
+
+// Result: Consistent USD value ($700) regardless of AXL price fluctuations. This way verifier can ensure consistent profit irrespective of AXL price fluctuations.
+```
+
+
 ## Requirements
 
 - AXL price should be calculated using **Volume Weighted Average Price (VWAP)** during the distribution cycle period.  
     - Using VWAP helps smooth out short-term price volatility and provides a fairer average price by weighting each trade by its volume, ensuring that periods of high trading activity have more influence on the calculated AXL price. This prevents manipulation or outlier trades from disproportionately impacting rewards payouts.
     - VWAP formula: `VWAP = Σ(Typical_Price × Volume) / Σ(Volume)` where `Typical_Price = (High + Low + Close) / 3`
+    - Example: Over 30 days with daily data, VWAP = (TP₁×V₁ + TP₂×V₂ + ... + TP₃₀×V₃₀) / (V₁ + V₂ + ... + V₃₀)
 - Function permission needs to be elevated since `axl_price_distribution_cycle` is sensitive for the actual payout
 - Include outlier protection to filter prices deviating >20% from median
 
