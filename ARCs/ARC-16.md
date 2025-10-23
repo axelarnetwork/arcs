@@ -333,8 +333,7 @@ public(package) fun give_unregistered_currency_coin<T>(
     currency.delete_metadata_cap(metadata_cap);
     
     // ibid. give_unregistered_coin...
-    
-    let currency: Currency<T> = move currency;
+
     self.add_unregistered_currency_coin<T>(token_id, treasury_cap, currency);
     
     // ibid. give_unregistered_coin...
@@ -407,9 +406,9 @@ public fun migrate_coin_to_currency<T>(
 
     // Metadata to be migrated must match token_id
     let coin_type = type_name::with_defining_ids<T>().into_string();
-    assert(expected_coin_type == coin_type);
+    assert(expected_coin_type == coin_type, EMismatchedCoinType);
 
-    // Migrate CoinMetdata<T> -> Currency<T>
+    // Migrate CoinMetadata<T> -> Currency<T>
     coin_registry.migrate_legacy_metadata(coin_metadata);
 }
 ```
