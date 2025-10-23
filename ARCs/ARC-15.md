@@ -1,8 +1,8 @@
-# ARC-14: Implement Threshold + Proportional Reward Distribution
+# ARC-15: Implement Threshold + Proportional Reward Distribution
 
 ## Metadata
 
-- **ARC ID**: 14
+- **ARC ID**: 15
 - **Author(s)**: Ayush Tiwari
 - **Category**: Amplifier Protocol
 - **Status**: Draft
