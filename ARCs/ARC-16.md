@@ -397,8 +397,8 @@ Provide administrative functions to migrate legacy coins from `CoinMetadata<T>` 
 ```move
 public fun migrate_coin_to_currency<T>(
     self: &mut InterchainTokenService_v0,
-    coin_registry: &mut CoinRegistry,
     _: &OperatorCap,
+    coin_registry: &mut CoinRegistry,
     coin_metadata: &CoinMetadata<T>,
     token_id: TokenId,
 ) {
