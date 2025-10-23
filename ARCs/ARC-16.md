@@ -54,7 +54,55 @@ The Interchain Token Service should migrate to the Currency Standard for several
 
 The migration introduces parallel function paths rather than replacing existing ones, ensuring zero disruption to currently registered tokens while enabling new registrations to use the Currency Standard. All new functions are additions, not replacements, and legacy code paths remain untouched and fully supported.
 
-[DIAGRAM]*Suggested diagram: High-level architecture showing dual registration paths (legacy CoinMetadata<T> and new Currency<T>) converging into the ITS registry*[/DIAGRAM]
+```mermaid
+graph TB
+    subgraph "User Registration Inputs"
+        LegacyInput["Legacy Path<br/>CoinMetadata&lt;T&gt;"]
+        CurrencyInput["New Path<br/>Currency&lt;T&gt;"]
+    end
+
+    subgraph "Public ITS Module"
+        LegacyFunc["register_coin_from_metadata&lt;T&gt;<br/>register_custom_coin&lt;T&gt;"]
+        CurrencyFunc["register_coin_<br/>from_currency&lt;T&gt;<br/>register_custom_coin_from<br/>_currency&lt;T&gt;"]
+    end
+
+    subgraph "Version-Controlled Module"
+        MetadataExtract["Extract:<br/>name, symbol, decimals"]
+        CreateCoinInfo["Create CoinInfo&lt;T&gt;"]
+        RegisterCoin["register_coin()<br/>Internal Logic"]
+    end
+
+    subgraph "ITS Registry Storage"
+        Registry["Registered Coins<br/>TokenId → CoinData&lt;T&gt;"]
+    end
+
+    subgraph "Cross-Chain Communication"
+        MetadataLegacy["register_coin_metadata&lt;T&gt;<br/>(CoinMetadata)"]
+        MetadataCurrency["register_coin_metadata_<br/>from_currency&lt;T&gt;<br/>(Currency)"]
+        GMP["Axelar Hub via GMP<br/>MessageTicket"]
+    end
+
+    LegacyInput --> LegacyFunc
+    CurrencyInput --> CurrencyFunc
+    
+    LegacyFunc --> MetadataExtract
+    CurrencyFunc --> MetadataExtract
+    
+    MetadataExtract --> CreateCoinInfo
+    CreateCoinInfo --> RegisterCoin
+    RegisterCoin --> Registry
+    
+    LegacyInput -.-> MetadataLegacy
+    CurrencyInput -.-> MetadataCurrency
+    MetadataLegacy -.-> GMP
+    MetadataCurrency -.-> GMP
+
+    style LegacyInput fill: #e1f5ff, color: #333
+    style CurrencyInput fill: #d4edda, color: #333
+    style Registry fill: #fff3cd, color: #333
+    style GMP fill: #f8d7dc, color: #333
+    style RegisterCoin fill: #cfe2ff, color: #333
+```
 
 ### Module Changes
 
