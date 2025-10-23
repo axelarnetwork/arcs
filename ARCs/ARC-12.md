@@ -12,7 +12,7 @@
 
 ## Summary
 
-The current system requires the Voting Verifier contract to call the Rewards contract once **per verifier**, incurring repeated sub-message execution costs and higher gas. This ARC replaces those repeated calls with **one batched call** that processes many participation records **atomically** in a single transaction.
+The current system requires the Voting Verifier contract to call the Rewards contract once **per verifier**, incurring repeated sub-message execution costs and higher gas. This ARC replaces those repeated calls with **one batched call** that processes many participation records, reducing unnecessary read/writes.
 
 ## Background and Motivation
 
@@ -20,16 +20,14 @@ In the existing flow, the Voting Verifier iterates over every participation even
 
 - Triggers a full CosmWasm sub-message execution (serialization, context init/teardown, storage I/O).
 - Is metered independently, so cost scales with the number of verifiers.
-- Increases failure surface and reduces atomicity (partial updates possible).
 
-A single batched call removes redundant overhead and enforces all-or-nothing state changes.
+A single batched call removes redundant overhead.
 
 ## Requirements
 
 ### Functional
 
 - The Voting Verifier must be able to submit all participation records for a given **(chain_name, event_id)** in a single `RecordParticipationBatch` call.
-- The batch must be processed **atomically**; any invalid record causes **revert** of the entire transaction.
 - The legacy `RecordParticipation` (single submission) remains available and uses the same internal validation logic.
 
 ### Validation
@@ -62,7 +60,6 @@ RecordParticipation {
 
 - Called once per verifier during/after poll.
 - Gas scales linearly with the number of verifiers.
-- Atomicity is per call.
 
 ```mermaid
 sequenceDiagram
@@ -95,7 +92,7 @@ RecordParticipationBatch {
 **Behavior changes**
 
 - Voting Verifier aggregates `verifier_addresses` and performs a **single** call per `(chain_name, event_id)`.
-- Rewards validates input and writes participation **atomically**.
+- Rewards validates input and writes participation after processing, reducing the redundant write calls significantly.
 
 **Batch processing (Rewards) pseudocode**
 
@@ -112,7 +109,7 @@ for addr in verifier_addresses:
     require_positive_weight(addr, ctx)
     stage_update(ctx.participation[addr] += 1)
 
-commit_staged_updates_atomically()
+commit_staged_updates()
 ```
 
 ```mermaid
@@ -133,7 +130,7 @@ sequenceDiagram
     activate Rewards
     Note over Rewards: Validate • no duplicates • correct context • non-zero weight
     alt All OK
-        Rewards ->> Rewards: Apply staged updates atomically
+        Rewards ->> Rewards: Apply staged updates
         Rewards -->> VotingVerifier: OK
     else Any error
         Rewards -->> VotingVerifier: REVERT (no state change)
