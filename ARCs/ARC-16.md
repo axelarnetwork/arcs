@@ -406,7 +406,7 @@ public fun migrate_coin_to_currency<T>(
 
     // Metadata to be migrated must match token_id
     let coin_type = type_name::with_defining_ids<T>().into_string();
-    assert(expected_coin_type == coin_type, EMismatchedCoinType);
+    assert!(expected_coin_type == coin_type, EMismatchedCoinType);
 
     // Migrate CoinMetadata<T> -> Currency<T>
     coin_registry.migrate_legacy_metadata(coin_metadata);
