@@ -7,7 +7,7 @@
 - **Category**: Amplifier Protocol
 - **Status**: Draft
 - **Created**: 2025-10-22
-- **Last Updated**: 2025-10-22
+- **Last Updated**: 2025-10-23
 - **Target Implementation**: Q4 2025
 
 ## Summary
@@ -20,9 +20,9 @@ The current reward distribution system uses equal distribution among qualified v
 
 The existing equal distribution system has several limitations:
 
-1. **No Performance Differentiation**: A verifier with 90% participation receives the same reward as one with 100% participation
-2. **Binary Incentive Structure**: Verifiers only need to meet the minimum threshold, with no incentive for exceptional performance
-3. **Suboptimal Resource Allocation**: Reward pools may not reflect actual network contribution levels
+1. **No Performance Differentiation**: A verifier with 90% participation receives the same reward as one with 100% participation.
+2. **Binary Incentive Structure**: Verifiers only need to meet the minimum threshold, with no incentive for exceptional performance.
+3. **Suboptimal Resource Allocation**: Reward pools may not reflect actual network contribution levels.
 
 ### Current Threshold Check Implementation
 
@@ -67,15 +67,24 @@ pub fn rewards_by_verifier(&self) -> HashMap<Addr, Uint128> {
 ```
 
 ### Current Formula
+
 ```rust
 // Equal distribution among qualified verifiers
 rewards_per_verifier = total_rewards_per_epoch ÷ number_of_qualified_verifiers
 ```
 
 ### Proposed Formula
+
 ```rust
 // Proportional distribution among qualified verifiers
 verifier_reward = total_rewards_per_epoch × (verifier_participation ÷ total_qualified_participation)
+```
+
+Or in simple mathematical form:
+
+```
+reward[v] = total_rewards * (P[v] / Σ P[v])  for v ∈ Q
+reward[v] = 0                                for v ∉ Q
 ```
 
 ## Requirements
@@ -83,34 +92,39 @@ verifier_reward = total_rewards_per_epoch × (verifier_participation ÷ total_qu
 ### Functional Requirements
 
 #### Threshold + Proportional Logic
-- Verifiers must meet the existing participation threshold to qualify for rewards
-- Among qualified verifiers, rewards are distributed proportionally based on participation levels
-- Maintain the existing 2-epoch delay for reward distribution
+
+- Verifiers must meet the existing participation threshold to qualify for rewards.
+- Among qualified verifiers, rewards are distributed proportionally based on participation levels.
+- Maintain the existing 2-epoch delay for reward distribution.
 
 #### Validation
-- **Input Validation**: All participation counts must be non-negative
-- **Overflow Protection**: Use `checked_mul` and `checked_div` for safe arithmetic
-- **Threshold Validation**: Maintain existing threshold validation logic
+
+- **Input Validation**: All participation counts must be non-negative.
+- **Overflow Protection**: Use `checked_mul` and `checked_div` for safe arithmetic.
+- **Threshold Validation**: Maintain existing threshold validation logic.
+- **Empty Set Guard**: Return an empty map if no verifiers qualify or denominator is zero.
 
 ### Example Scenarios
 
 #### Scenario 1: Current Equal Distribution
+
 ```rust
 // Pool: 1000 AXL tokens, Threshold: 9/10 events (90%)
-// Ted: 10/10 events (100%) 
-// Robbin: 9/10 events (90%) 
-// Barney: 8/10 events (80%) 
+// Ted: 10/10 events (100%)
+// Robin: 9/10 events (90%)
+// Barney: 8/10 events (80%)
 
 // Current method: Equal distribution
 // Ted: 1000 ÷ 2 = 500 AXL
-// Robbin: 1000 ÷ 2 = 500 AXL
+// Robin: 1000 ÷ 2 = 500 AXL
 // Barney: 0 AXL
 ```
 
 #### Scenario 2: New Threshold + Proportional Distribution
+
 ```rust
 // Same scenario with new method
-// Qualified verifiers: Ted (10), Robbin (9)
+// Qualified verifiers: Ted (10), Robin (9)
 // Total qualified participation: 10 + 9 = 19
 
 // New method: Proportional distribution
@@ -119,14 +133,12 @@ verifier_reward = total_rewards_per_epoch × (verifier_participation ÷ total_qu
 // Barney: 0 AXL (below threshold)
 ```
 
-
-
 ## Expected Benefits
-1. **Better Incentive Alignment**: Rewards reflect actual network contribution
-2. **Increased Participation**: Incentive for verifiers to participate in more events
-3. **Improved Network Security**: Higher overall participation rates
-4. **Fairer Distribution**: More granular reward differentiation
 
+1. **Better Incentive Alignment**: Rewards reflect actual network contribution.
+2. **Increased Participation**: Incentive for verifiers to participate in more events.
+3. **Improved Network Security**: Higher overall participation rates.
+4. **Fairer Distribution**: More granular reward differentiation.
 
 ## References
 
@@ -137,4 +149,4 @@ verifier_reward = total_rewards_per_epoch × (verifier_participation ÷ total_qu
 
 | Date       | Revision | Author       | Description   |
 | ---------- | -------- | ------------ | ------------- |
-| 2025-10-22 | v1.0     | Ayush Tiwari  | Initial draft |
+| 2025-10-22 | v1.0     | Ayush Tiwari | Initial draft |
