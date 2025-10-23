@@ -318,7 +318,7 @@ Transfers an unregistered currency coin to the ITS contract:
 ```move
 public(package) fun give_unregistered_currency_coin<T>(
     self: &mut InterchainTokenService_v0,
-    currency: &mut Currency<T>,
+    currency: mut Currency<T>,
     treasury_cap: TreasuryCap<T>,
     metadata_cap: MetadataCap<T>,
 ) {
@@ -334,6 +334,7 @@ public(package) fun give_unregistered_currency_coin<T>(
     
     // ibid. give_unregistered_coin...
     
+    let currency: Currency<T> = move currency;
     self.add_unregistered_currency_coin<T>(token_id, treasury_cap, currency);
     
     // ibid. give_unregistered_coin...
@@ -396,9 +397,21 @@ Provide administrative functions to migrate legacy coins from `CoinMetadata<T>` 
 ```move
 public fun migrate_coin_to_currency<T>(
     self: &mut InterchainTokenService_v0,
+    coin_registry: &mut CoinRegistry,
+    _: &OperatorCap,
+    coin_metadata: &CoinMetadata<T>,
     token_id: TokenId,
-    operator_cap: &OperatorCap,
-)
+) {
+    // Coin must be registered
+    let expected_coin_type = (*self.registered_coin_type(token_id)).into_string();
+
+    // Metadata to be migrated must match token_id
+    let coin_type = type_name::with_defining_ids<T>().into_string();
+    assert(expected_coin_type == coin_type);
+
+    // Migrate CoinMetdata<T> -> Currency<T>
+    coin_registry.migrate_legacy_metadata(coin_metadata);
+}
 ```
 
 **Migration Requirements:**
