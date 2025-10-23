@@ -1,8 +1,8 @@
-# ARC-13: AXL price should be calculated when `DistributeRewards` is executed
+# ARC-14: AXL price should be calculated when `DistributeRewards` is executed
 
 ## Metadata
 
-- **ARC ID**: 13
+- **ARC ID**: 14
 - **Author(s)**: Ayush Tiwari
 - **Category**: Amplifier Protocol
 - **Status**: Draft
