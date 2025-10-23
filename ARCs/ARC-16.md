@@ -1,8 +1,8 @@
-# ARC-12: Sui ITS Currency Standard Migration
+# ARC-16: Sui ITS Currency Standard Migration
 
 ## Metadata
 
-- **ARC ID**: 12
+- **ARC ID**: 16
 - **Author(s)**: Drew Taylor
 - **Category**: Interchain Token Protocol
 - **Status**: Draft
