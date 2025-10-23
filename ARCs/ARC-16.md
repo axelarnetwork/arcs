@@ -7,7 +7,7 @@
 - **Category**: Interchain Token Protocol
 - **Status**: Draft
 - **Created**: 2025-10-22
-- **Last Updated**: 2025-10-22
+- **Last Updated**: 2025-10-23
 - **Target Implementation**: Q4 2025
 
 ## Summary
@@ -418,4 +418,5 @@ public fun migrate_coin_to_currency<T>(
 
 | Date | Revision | Author | Description |
 |------|----------|--------|-------------|
-| 2025-10-23 | v1.0 | Drew Taylor | Initial draft |
+| 2025-10-22 | v1.0 | Drew Taylor | Initial draft |
+| 2025-10-23 | v1.1 | Drew Taylor | Add registration flow diagram |
