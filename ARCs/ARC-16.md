@@ -177,7 +177,6 @@ public fun register_custom_coin_from_currency<T>(...)
 public fun register_coin_metadata_from_currency<T>(...)
 public fun give_unregistered_currency_coin<T>(...)
 public fun give_unlinked_currency_coin<T>(...)
-public fun remove_unregistered_currency_coin<T>(...)
 ```
 
 Each function delegates to its corresponding implementation in `interchain_token_service_v0`.
