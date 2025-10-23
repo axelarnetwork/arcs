@@ -1,8 +1,8 @@
-# ARC-12: Record participation batched variant in Rewards contract
+# ARC-13: Record participation batched variant in Rewards contract
 
 ## Metadata
 
-- **ARC ID**: 12
+- **ARC ID**: 13
 - **Author(s)**: Ayush Tiwari
 - **Category**: Amplifier Protocol
 - **Status**: Draft
