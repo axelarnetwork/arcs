@@ -132,7 +132,7 @@ public fun register_coin_with_cap<TOKEN>(
 
 #### 2. InterchainToken Module Rewrite (`interchain_token/sources/interchain_token.move`)
 
-The InterchainToken module will be rewritten to utilize the new `coin_registry` module for token creation.
+The `InterchainToken` module will be rewritten to utilize the new `coin_registry` module for token creation.
 
 **New Implementation Pattern:**
 
@@ -145,11 +145,11 @@ module interchain_token::q {
     fun init(witness: Q, ctx: &mut TxContext) {
         let (builder, treasury_cap) = coin_registry::new_currency_with_otw(
             witness,
-            9,                                      // decimals
-            b"Q".to_string(),                       // symbol
-            b"Quote".to_string(),                   // name
-            b"".to_string(),                        // description
-            b"".to_string(),                        // icon URL
+            9,                      // decimals
+            b"Q".to_string(),       // symbol
+            b"Quote".to_string(),   // name
+            b"".to_string(),        // description
+            b"".to_string(),        // icon URL (no longer optional)
             ctx,
         );
 
@@ -268,7 +268,7 @@ fun add_unlinked_currency_coin<T>(
 
 **4.5 `give_unlinked_currency_coin<T>`**
 
-Public function to register an unlinked coin:
+Public function to record metadata in ITS for an unlinked coin and ensure the treasury cap is present if the token manager type is `mint_burn`.
 
 ```move
 public(package) fun give_unlinked_currency_coin<T>(
