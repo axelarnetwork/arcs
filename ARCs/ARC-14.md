@@ -1,8 +1,8 @@
-# ARC-13: AXL price should be calculated when `DistributeRewards` is executed
+# ARC-14: AXL price should be calculated when `DistributeRewards` is executed
 
 ## Metadata
 
-- **ARC ID**: 13
+- **ARC ID**: 14
 - **Author(s)**: Ayush Tiwari
 - **Category**: Amplifier Protocol
 - **Status**: Draft
@@ -70,7 +70,6 @@ let number_of_verifiers = 30;
 let number_of_pools = 2;
 let number_of_epochs_in_a_month = 30;
 
-// Total compensation = 1000 + (1000 * 0.40) = 1400 USD
 let fixed_reward_per_epoch = (1400 * 30) / (2 * 30 * 0.15) = 4666.667 AXL = $700 USD
 
 // Price movement after chain addition:
