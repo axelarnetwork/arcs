@@ -7,8 +7,8 @@
 - **Category**: Amplifier Protocol
 - **Status**: Draft
 - **Created**: 2025-10-22
-- **Last Updated**: 2025-10-23
-- **Target Implementation**: Q4 2025
+- **Last Updated**: 2025-10-30
+- **Target Implementation**: Q1 2026
 
 ## Summary
 
@@ -87,6 +87,18 @@ reward[v] = total_rewards * (P[v] / Σ P[v])  for v ∈ Q
 reward[v] = 0                                for v ∉ Q
 ```
 
+Where:
+- `v` = verifier address
+- `P[v]` = participation count for verifier v (number of events they participated in)
+- `Q` = set of qualified verifiers (verifiers who have met the participation threshold)
+- `Σ P[v]` = total_qualified_participation (sum of participation counts for all qualified verifiers)
+- `total_rewards` = total reward pool for the epoch
+
+**Key Definitions:**
+- **Qualified verifiers (Q)**: Verifiers whose participation rate meets or exceeds the threshold (e.g., 9/10 events = 90% threshold)
+- **Total qualified participation (Σ P[v])**: Sum of all participation counts from verifiers who qualified for rewards
+- **Participation count (P[v])**: Number of events a specific verifier participated in during the epoch
+
 ## Requirements
 
 ### Functional Requirements
@@ -124,13 +136,16 @@ reward[v] = 0                                for v ∉ Q
 
 ```rust
 // Same scenario with new method
-// Qualified verifiers: Ted (10), Robin (9)
-// Total qualified participation: 10 + 9 = 19
+// Qualified verifiers (Q): Ted (10), Robin (9) - both meet 90% threshold
+// Barney (8) - does NOT qualify (80% < 90% threshold)
+// Total qualified participation (Σ P[v]): 10 + 9 = 19
 
-// New method: Proportional distribution
+// New method: Proportional distribution among qualified verifiers only
 // Ted: 1000 × (10 ÷ 19) = 526.32 AXL
-// Robin: 1000 × (9 ÷ 19) = 473.68 AXL
-// Barney: 0 AXL (below threshold)
+// Robin: 1000 × (9 ÷ 19) = 473.68 AXL  
+// Barney: 0 AXL (not in qualified set Q)
+
+// Verification: 526.32 + 473.68 = 1000 AXL ✓
 ```
 
 ## Expected Benefits
