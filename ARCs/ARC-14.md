@@ -53,10 +53,12 @@ At the start of each epoch (or on a weekly schedule), the operator submits the n
 
 Each payout remains close to $700 USD per epoch.
 
-## Edge Cases & Safeguards
+## Edge Cases & Safeguard Recommendations
 
-- Operator should use a multi-sig or monitored account
+- Operator should use a monitored account, suspicious transactions should trigger alerts
 - Optionally add validation to prevent zero/absurd reward values
+    - For instance `rewards_per_epoch` cannot change more than 20 percent in a single update
+    - `rewards_per_epoch` cannot be updated twice in the same epoch
 - Governance can still override if needed
 
 ## Changelog
