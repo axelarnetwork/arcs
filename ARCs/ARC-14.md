@@ -1,4 +1,4 @@
-# ARC-14: AXL price should be calculated when `DistributeRewards` is executed
+# ARC-14: Reward Adjustments via Operator Pool Param Updates
 
 ## Metadata
 
@@ -7,173 +7,61 @@
 - **Category**: Amplifier Protocol
 - **Status**: Draft
 - **Created**: 2025-10-17
-- **Last Updated**: 2025-10-23
-- **Target Implementation**: Q4 2025
+- **Last Updated**: 2025-10-30
+- **Target Implementation**: Q1 2026
 
 ## Summary
 
-`DistributeRewards` function should be updated to take the **AXL price** as an input argument and use it to calculate the actual AXL payout corresponding to a fixed USD-denominated target reward for a given distribution cycle.  
-This ensures that payouts remain stable in USD terms, even as the AXL/USD exchange rate fluctuates.
+Authorize an operator (Elevated permission) to adjust `rewards_per_epoch` on a frequent cadence (e.g., weekly or per epoch) so verifier payouts remain aligned with a USD-equivalent target as market conditions change. This proposal requires a single permission update; reward accounting, participation checks, and permissionless distribution remain unchanged.
 
-## Background and Motivation
+## Current System
 
-Currently, every chain stores a configuration parameter called `rewards_per_epoch` which represents the payout Axelar wants to give to the verifiers in a single epoch.  
-This value is computed **in terms of USD** but then converted to AXL _at the time of chain addition_ using the then-current AXL price:
+- Only governance can update pool parameters (including `rewards_per_epoch`).
+- `rewards_per_epoch` is set at pool creation and can become misaligned as AXL price fluctuates.
+- Governance updates are slow, limiting responsiveness and causing verifier payouts to drift from intended USD value.
 
-```
-reward_per_epoch (AXL) = (monthly_infra_cost_per_verifier * (1 + verifier_profit_percent) * number_of_verifiers)
-                        / (number_of_pools * number_of_epochs_in_a_month * axl_price)
-```
+**Current code (before):**
 
-Here, `axl_price` is fixed during chain addition, but in reality, it fluctuates constantly.  
-This means that as AXL appreciates or depreciates, verifier earnings (in USD terms) drift away from the intended payout — creating volatility and potential misalignment between network cost and verifier reward.
-
-To solve this, we propose saving `rewards_per_epoch` as a **USD constant** and converting it to AXL _at distribution time_ using the VWAP-based price (`axl_price_distribution_cycle`).
-
-This means chain additions will now save:
-
-```
-reward_per_epoch (USD) = (monthly_infra_cost_per_verifier * (1 + verifier_profit_percent) * number_of_verifiers)
-                        / (number_of_pools * number_of_epochs_in_a_month)
+```rust
+// axelar-amplifier/contracts/rewards/src/msg.rs (permission attribute)
+#[permission(Governance)]
+UpdatePoolParams { params: Params, pool_id: PoolId },
 ```
 
-and when distributing rewards, the Rewards contract will fetch or be given the AXL price applicable to the distribution cycle and convert accordingly.
+## Proposed System
 
-### Updated Function Signature
+- Change `UpdatePoolParams` permission to `Elevated` (operator or governance).
+- The operator recalculates and updates `rewards_per_epoch` off-chain when price moves materially (weekly or per epoch).
+- No changes to participation tracking, epoch processing, or the permissionless `DistributeRewards` flow.
+
+**Code (after):**
 
 ```rust
 #[permission(Elevated)]
-DistributeRewards {
-    pool_id: PoolId,
-    epoch_count: Option<u64>,
-    axl_price_distribution_cycle: Option<Decimal>, // VWAP-based AXL price
-}
+UpdatePoolParams { params: Params, pool_id: PoolId },
 ```
 
-The function implementation then computes the AXL reward dynamically using the provided price.
+At the start of each epoch (or on a weekly schedule), the operator submits the new value. Subsequent distributions for that epoch use the latest `rewards_per_epoch`.
 
----
+## Example Scenario
 
-## Example Scenarios
+| Epoch | AXL Price (USD) | rewards_per_epoch |
+| ----- | --------------- | ----------------- |
+| 1     | $0.14           | =700/0.14 = 5,000 |
+| 2     | $0.20           | =700/0.20 = 3,500 |
+| 3     | $0.11           | =700/0.11 = 6,364 |
 
-### Scenario 1: AXL Price Volatility Impact (Current System)
+Each payout remains close to $700 USD per epoch.
 
-```rust
-// Chain added in January 2025
-let chain_addition_date = "2025-01-15";
-let axl_price_at_addition = 0.15; // USD/AXL
+## Edge Cases & Safeguards
 
-// Example parameters
-let monthly_infra_cost_per_verifier = 1000; // USD
-let verifier_profit_percent = 0.40; // 40%
-let number_of_verifiers = 30;
-let number_of_pools = 2;
-let number_of_epochs_in_a_month = 30;
-
-let fixed_reward_per_epoch = (1400 * 30) / (2 * 30 * 0.15) = 4666.667 AXL = $700 USD
-
-// Price movement after chain addition:
-AXL Price:
-- March 2025 → $0.25
-- May 2025 → $0.10
-- July 2025 → $0.30
-
-// Impact:
-- March: 4666.667 AXL = $1,166.67
-- May:   4666.667 AXL = $466.67
-- July:  4666.667 AXL = $1,400
-```
-
-**Observation:** Verifiers receive the same AXL quantity but experience huge USD swings (±100%).  
-This distorts the economic balance intended by the protocol.
-
----
-
-### Scenario 2: USD-Denominated Rewards (Proposed System)
-
-```rust
-// Using same configuration
-let monthly_infra_cost_per_verifier = 1000; // USD
-let verifier_profit_percent = 0.40;
-let number_of_verifiers = 30;
-let number_of_pools = 2;
-let number_of_epochs_in_a_month = 30;
-
-// Fixed USD reward per epoch
-let reward_per_epoch_usd = (1400 * 30) / (2 * 30) = 700 USD
-
-// Conversion at distribution time using VWAP
-March 2025: VWAP = 0.25 → 700 / 0.25 = 2800 AXL
-May 2025:   VWAP = 0.10 → 700 / 0.10 = 7000 AXL
-July 2025:  VWAP = 0.30 → 700 / 0.30 = 2333.33 AXL
-```
-
-**Result:**  
-Verifiers always earn ~$700 per epoch regardless of AXL’s market price.  
-This stabilizes payouts and ensures predictable economics for all participants.
-
----
-
-## Requirements
-
-- **VWAP-based AXL price:**  
-  The price used during distribution must be calculated using **Volume Weighted Average Price (VWAP)** across the distribution cycle.
-
-  - VWAP smooths out short-term volatility and weights price by traded volume, giving a more representative rate.
-  - Formula:
-    ```
-    VWAP = Σ(TPᵢ × Vᵢ) / Σ(Vᵢ)
-    where TPᵢ = (Highᵢ + Lowᵢ + Closeᵢ) / 3
-    ```
-  - Example (30-day window):
-    ```
-    VWAP = (TP₁×V₁ + TP₂×V₂ + ... + TP₃₀×V₃₀) / (V₁ + V₂ + ... + V₃₀)
-    ```
-
-- **Outlier protection:**  
-  Samples deviating more than **20% from the median** should be excluded to avoid manipulation.
-
-- **Precision:**  
-  `axl_price_distribution_cycle` must be of type `Decimal` (not integer) to capture fractional prices.
-
-- **Permissioning:**  
-  Function requires elevated permission since it controls real reward distribution.
-
----
-
-## Pseudocode
-
-```text
-fn distribute(pool_id, epoch_count_opt, axl_price_opt):
-    usd_target = load_reward_per_epoch_usd(pool_id)
-    price = axl_price_opt.unwrap_or_else(fetch_vwap_with_outlier_filter)
-    require(price > 0)
-
-    axl_per_epoch = usd_target / price
-    epochs = epoch_count_opt.unwrap_or(default_epoch_count())
-    total_axl = axl_per_epoch * epochs
-
-    credit_rewards(pool_id, total_axl)
-```
-
----
-
-## Future Work
-
-- Decentralize `axl_price_distribution_cycle` calculation.
-- Introduce quorum-based or oracle-verified price attestations.
-
----
-
-## References
-
-- Rewards participation storage: [axelar-amplifier/contracts/rewards](https://github.com/axelarnetwork/axelar-amplifier/tree/main/contracts/rewards)
-- VWAP concepts: [WallStreetMojo](https://www.wallstreetmojo.com/volume-weighted-average-price/), [QuantInsti VWAP Guide](https://blog.quantinsti.com/vwap-strategy/)
-
----
+- Operator should use a multi-sig or monitored account
+- Optionally add validation to prevent zero/absurd reward values
+- Governance can still override if needed
 
 ## Changelog
 
-| Date       | Revision | Author       | Description   |
-| ---------- | -------- | ------------ | ------------- |
-| 2025-10-16 | v1.0     | Ayush Tiwari | Initial draft |
+| Date       | Revision | Author       | Description                             |
+| ---------- | -------- | ------------ | --------------------------------------- |
+| 2025-10-25 | v2.0     | Ayush Tiwari | Operator-controlled `rewards_per_epoch` |
+| 2025-10-16 | v1.0     | Ayush Tiwari | Initial draft                           |
