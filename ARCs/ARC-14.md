@@ -65,5 +65,5 @@ Each payout remains close to $700 USD per epoch.
 
 | Date       | Revision | Author       | Description                             |
 | ---------- | -------- | ------------ | --------------------------------------- |
-| 2025-10-25 | v2.0     | Ayush Tiwari | Operator-controlled `rewards_per_epoch` |
+| 2025-10-30 | v2.0     | Ayush Tiwari | Operator-controlled `rewards_per_epoch` |
 | 2025-10-16 | v1.0     | Ayush Tiwari | Initial draft                           |
