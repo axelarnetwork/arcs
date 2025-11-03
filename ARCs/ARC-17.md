@@ -172,7 +172,7 @@ public fun new_with_cap<T>(treasury_cap: TreasuryCap<T>): CoinManagement<T> {
 - No balance storage needed
 - Tokens are burned by decreasing supply, minted by increasing supply
 
-#### Core Operations
+#### `CoinManagement` Core Operations
 
 **Taking Tokens (Outbound Transfer):**
 ```move
