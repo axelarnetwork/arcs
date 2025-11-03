@@ -254,48 +254,6 @@ To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(t
 
 [TODO: Sequence diagram showing: User creates Channel → registers metadata on both chains → registers custom coin → links to destination → optional treasury cap transfer → cross-chain transfer flow]
 
-**Example: Linking Sui Token (LOCK_UNLOCK) to EVM Token (MINT_BURN)**
-
-```move
-// 1. Create deployer Channel
-let deployer = channel::new(ctx);
-
-// 2. Register Sui coin metadata
-let ticket = its.register_coin_metadata<MYTOKEN>(&coin_metadata);
-// Send ticket via relayer
-
-// 3. Register EVM token metadata (via EVM client)
-// its.registerTokenMetadata(evm_token_address, gasValue);
-
-// 4. Register custom coin on Sui
-let salt = bytes32::new(0x0000...0001);
-let coin_management = coin_management::new_locked<MYTOKEN>();
-let (token_id, _) = its .register_custom_coin<MYTOKEN>(
-    &deployer,
-    salt,
-    &coin_metadata,
-    coin_management,
-    ctx
-);
-
-// 5. Link to EVM
-let ticket = its.link_coin(
-    &deployer,
-    salt,
-    ascii::string(b"ethereum"),
-    evm_token_address_bytes,
-    token_manager_type::lock_unlock(),
-    vector::empty()  // No operator
-);
-// Send ticket via relayer
-
-// 6. On EVM: Transfer minter role to token manager (since EVM is MINT_BURN)
-// address tokenManager = its.tokenManagerAddress(tokenId);
-// token.transferMintership(tokenManager);
-
-// 7. Tokens are now linked and ready for transfers
-```
-
 ## References
 
 - [ARC-1](./ARC-1.md)
