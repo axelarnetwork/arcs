@@ -218,7 +218,7 @@ public struct CoinManagement<phantom T> has store {
 | **Type Safety** | Runtime via address lookup | Compile-time via generic `<T>` |
 | **Authority Model** | Role-based (operator, minter) | Object-based (`TreasuryCap`, `Channel` addresses) |
 | **Minting & Burning** | Calls token.mint(), token.burn() with minter role | Directly mints and burns via `TreasuryCap` |
-| **Locking** | Transfers tokens to/from contract | Joins/splits Balance<T> |
+| **Locking** | Transfers tokens to/from contract | Joins/splits `Balance<T>` |
 
 #### CoinManagement Variants
 
