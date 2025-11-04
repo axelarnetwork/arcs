@@ -419,4 +419,4 @@ sequenceDiagram
 |  Date  | Revision  | Author |  Description  |
 |--------|-----------|--------|---------------|
 | 2025-11-03 | v1.0 | Drew Taylor | Initial draft |
-| 2025-11-04 | v1.1 | Drew Taylor | Add address encoding, token linking diagrams |
+| 2025-11-04 | v1.1 | Drew Taylor | Add address encoding, token linking diagram |
