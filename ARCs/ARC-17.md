@@ -24,12 +24,12 @@ ITS supports two distinct token deployment approaches:
 
 The ability to link tokens with different decimals is crucial for integrating existing token ecosystems. For example, USDC has 6 decimals on some chains (e.g. Ethereum, Solana, etc.) but 18 on others (e.g. BNB Chain). When linking tokens with different decimal precisions, ITS Hub automatically scales the decimals ensuring correct token transfer amounts while preserving each chain's native precision.
 
-### Motivation for Sui-Specific Specification
+### Motivation for Sui-Specific Token Linking ARC
 
-Sui's implementation differs fundamentally from EVM chains in several areas:
+Sui's implementation differs fundamentally from EVM (and other) chains in several areas:
 
 1. **Channel-Based Identity**: Uses `Channel` objects instead of addresses for deployer identity
-2. **Type Names for Token Addresses**: Sui coins are identified by their full type name, using the format `package::module::SYMBOL` (example: `0x0b6345a938be0a9bcd8319ca6b768bfddfffd60f0178d920973a528ef741c639::test::TEST`), rather than by contract address
+2. **Type Names for Token Addresses**: Sui coins are identified by their full type name, using the format `package::module::SYMBOL` (example: `0b6345a938be0a9bcd8319ca6b768bfddfffd60f0178d920973a528ef741c639::test::TEST`), rather than by contract address
 3. **CoinManagement Struct**: Replaces token manager contracts
 4. **Object-Based Capabilities**: `TreasuryCap` objects replace role-based minter permissions
 5. **Chain-Aware Token IDs**: Token ID derivation includes a chain name hash
@@ -115,6 +115,93 @@ public fun to_address(self: &Channel): address {
 **Usage in Token Linking:**
 
 The same `Channel` must be used for both `register_custom_coin` and `link_coin` transactions. This proves the coin deployer's identity since the token ID is derived, in both cases, from the `Channel` and user provided `salt`, and the derived token ID must already exist (e.g. match the token ID from `register_custom_coin`) for token linking to succeed.
+
+### Token Address Encoding
+
+#### Type Names vs Contract Addresses
+
+Sui identifies coins by their **full type name** rather than contract addresses. This fundamental difference stems from Move's type system, where each coin is defined as a generic type parameter `<T>` rather than a deployed contract instance.
+
+**EVM Token Address Format:**
+```
+0x1234567890abcdef1234567890abcdef12345678  // 20-byte hex address
+```
+
+**Sui Token Type Name Format:**
+```
+0x6345a938be0a9bcd8319ca6b768bfddfffd60f0178d920973a528ef741c639::test::TEST // type name (package_id::module_name::TYPE)
+```
+
+The Sui format consists of three components separated by `::`:
+1. **Package ID**: The hex address where the coin's package is deployed
+2. **Module Name**: The Move module containing the coin definition
+3. **Type Name**: The coin's type identifier (typically the coin symbol)
+
+This type-based identification is intrinsic to Move's design—coins aren't separate contract instances but rather instances of a generic `Coin<T>` type where `T` is the specific coin type.
+
+#### The Role of `registered_coin_type`
+
+When custom coins are registered with Sui ITS, a mapping is stored between `TokenId` and `TypeName`:
+
+```move
+public struct InterchainTokenService_v0 has store {
+    registered_coin_types: Table<TokenId, TypeName>,  // TokenId → TypeName mapping
+    registered_coins: Bag,                            // TokenId → CoinManagement<T>
+    // ... other fields
+}
+```
+
+The `registered_coin_type` function retrieves the stored type name for a given token ID:
+
+```move
+public fun registered_coin_type(self: &InterchainTokenService, token_id: TokenId): &TypeName {
+    assert!(self.registered_coin_types.contains(token_id), EUnregisteredCoin);
+    &self.registered_coin_types[token_id]
+}
+```
+
+This mapping is critical because:
+1. **Type Safety**: Ensures the correct coin (`<T>` parameter) is used in subsequent operations
+2. **Cross-Chain Compatibility**: Provides the token identifier needed for ITS Hub and other chains
+3. **Validation**: Verifies the token exists and is properly registered before linking
+
+#### Converting Type Names for ABI Encoding
+
+When constructing ITS messages, token addresses must be encoded as bytes for transmission. EVM token addresses are already in hexadecimal format and can be directly encoded. However, Sui type names contain non-hexadecimal characters (e.g. `::`), requiring conversion.
+
+**Encoding Process:**
+
+In the `link_coin` function, the source token type name is converted to bytes:
+
+```move
+// Retrieve the registered type name
+let source_token_address = (*self.registered_coin_type(token_id)).into_string().into_bytes();
+
+// Encode in the LINK_TOKEN message
+writer
+    .write_u256(MESSAGE_TYPE_LINK_TOKEN)
+    .write_u256(token_id.to_u256())
+    .write_u256(token_manager_type.to_u256())
+    .write_bytes(source_token_address)  // Type name as bytes
+    .write_bytes(destination_token_address)
+    .write_bytes(link_params);
+```
+
+The conversion chain is:
+1. `TypeName` → `String` via `.into_string()`
+2. `String` → `vector<u8>` via `.into_bytes()`
+3. Bytes written to ABI-encoded payload
+
+#### Cross-Chain Encoding Differences
+
+**Key Differences:**
+
+| Chain Type | Token Address Format | Encoding Method |
+|------------|---------------------|-----------------|
+| EVM | 20-byte hex address | Direct hex (already in proper format) |
+| Sui | Type name string with `::` | ASCII bytes (UTF-8 encoding of string) |
+| Stellar | Account/Contract address | ASCII bytes |
+| Solana (SVM) | Base58 address | Decoded to 32-byte hex |
 
 ### CoinManagement: Sui's Token Manager
 
