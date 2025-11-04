@@ -222,7 +222,7 @@ public struct CoinManagement<phantom T> has store {
 
 #### CoinManagement Variants
 
-Unlike EVM and other chains, Sui only supports two token manager types for custom tokens (`LOCK_UNLOCK` and `MINT_BURN`).
+Unlike EVM, and other chains, Sui only supports two token manager types for custom tokens (`LOCK_UNLOCK` and `MINT_BURN`).
 
 **LOCK_UNLOCK (`2u256`)**
 Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. 
