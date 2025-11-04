@@ -313,27 +313,13 @@ Only the assigned operator `Channel` can modify flow limits, providing security 
 
 Unlike EVM and other chains, Sui only supports two token manager types for custom tokens:
 
-#### LOCK_UNLOCK (`2`)
+#### LOCK_UNLOCK (`2u256`)
 
-Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. Use this manager type for coins that meet the following criteria:
-- Existing tokens with established supply distribution
-- No minting authority available or desired
-- Simple integration without authority transfer
+Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. To use this manager type, create a `CoinManagement` using the `new_locked<T>()` function.
 
-To use this manager type, create a `CoinManagement` using the `new_locked<T>()` function.
+#### MINT_BURN (`4u256`)
 
-#### MINT_BURN (`4`)
-
-Tokens are burned on source chain and minted on destination chain. Use this manager type for coins that meet the following criteria:
-- Dynamic supply management desired
-- New tokens being deployed cross-chain
-- Lock/unlock liquidity insufficient
-
-To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(treasury_cap)` function.
-
-**`MINT_BURN` Requirements:**
-- Deployer must provide `TreasuryCap<T>` and transfer it to ITS
-- Returns `TreasuryCapReclaimer<T>` for reclaiming the `TreasuryCap`
+Tokens are burned on source chain and minted on destination chain To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(treasury_cap)` function.
 
 ### Complete Process Flow
 
