@@ -225,7 +225,7 @@ public struct CoinManagement<phantom T> has store {
 Unlike EVM, and other chains, Sui only supports two token manager types for custom tokens (`LOCK_UNLOCK` and `MINT_BURN`).
 
 **LOCK_UNLOCK (`2u256`)**
-Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. 
+Tokens are locked on the source chain and unlocked from pre-existing supply on the destination chain. 
 
 - Stores `Balance<T>` for holding locked tokens
 - No `TreasuryCap` needed
@@ -248,7 +248,7 @@ public fun new_locked<T>(): CoinManagement<T> {
 
 **MINT_BURN (`4u256`)**
 
-Tokens are burned on source chain and minted on destination chain.
+Tokens are burned on the source chain and minted on the destination chain.
 
 - Stores `TreasuryCap<T>` for minting/burning
 - No balance storage needed
