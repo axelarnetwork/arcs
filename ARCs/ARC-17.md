@@ -320,7 +320,9 @@ public(package) fun set_flow_limit<T>(
 
 Only the assigned operator `Channel` can modify flow limits, providing security against unauthorized rate limit changes.
 
-### Complete Process Flow
+### Complete Process Flow Example
+
+Sequence flow example with Sui as the source chain (`MINT_BURN`) and an EVM chain as the destination chain (`LOCK_UNLOCK`).
 
 ```mermaid
 sequenceDiagram
