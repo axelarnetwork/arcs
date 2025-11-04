@@ -6,30 +6,30 @@
 - **Author(s)**: Drew Taylor
 - **Category**: Interchain Token Protocol
 - **Status**: Final
-- **Created**: 2025-11-3
-- **Last Updated**: 2025-11-3
+- **Created**: 2025-11-03
+- **Last Updated**: 2025-11-04
 - **Deployment Status**: Live
 
 ## Summary
 
-This ARC specifies the implementation of custom token linking for Sui in the Interchain Token Service (ITS). Custom token linking enables existing Sui coins to be linked with tokens on other chains while supporting different decimal precisions through ITS Hub's automatic scaling. This specification details the Sui-specific patterns, `Channel`-based identity model, `CoinManagement` structure, and key architectural differences from EVM implementations.
+This ARC specifies the implementation of custom token linking for Sui in the Interchain Token Service (ITS). Custom token linking enables existing Sui coins to be linked with tokens on other chains while supporting different decimal precisions through ITS Hub's automatic scaling. This specification details the Sui-specific patterns, `Channel`-based identity model, `CoinManagement` token manager structure, and key architectural differences from EVM implementations.
 
 ## Background and Motivation
 
 ITS supports two distinct token deployment approaches:
 
-**Native Interchain Tokens** are deployed directly by ITS using standardized contracts. They must have identical decimals across all chains, and use a simplified `deploy` → `deploy remote` workflow. No metadata registration is required since decimals are uniform.
+**Native Interchain Tokens**: Tokens deployed directly by ITS using standardized contracts. They must have identical decimals across all chains, and linking uses a **deploy origin** → **deploy remote** workflow. Metadata registration is not required, since decimals are the same on both the origin and destination chains.
 
-**Custom Tokens** are existing tokens deployed independently that integrate with ITS through registration and linking. They support different decimal precisions across chains via ITS Hub's automatic scaling. The workflow requires metadata registration on each chain, followed by token registration and explicit linking. Custom tokens cannot use the `NATIVE_INTERCHAIN_TOKEN` manager type.
+**Custom Tokens**: Tokens deployed independently that integrate with ITS through registration and linking. They support different decimal precisions across chains via ITS Hub's automatic scaling. Linking requires metadata registration on each chain, followed by registration in ITS, then explicit linking. Custom tokens cannot use the `NATIVE_INTERCHAIN_TOKEN` token manager type.
 
-The ability to link tokens with different decimals is crucial for integrating existing token ecosystems. For example, USDC has 6 decimals on some chains but 18 on others. When linking such tokens, ITS Hub automatically scales amounts (e.g., by 10^12 when transferring from 6 to 18 decimals), ensuring correct token quantities while preserving each chain's native precision.
+The ability to link tokens with different decimals is crucial for integrating existing token ecosystems. For example, USDC has 6 decimals on some chains (e.g. Ethereum, Solana, etc.) but 18 on others (e.g. BNB Chain). When linking tokens with different decimal precisions, ITS Hub automatically scales the decimals ensuring correct token transfer amounts while preserving each chain's native precision.
 
 ### Motivation for Sui-Specific Specification
 
 Sui's implementation differs fundamentally from EVM chains in several areas:
 
 1. **Channel-Based Identity**: Uses `Channel` objects instead of addresses for deployer identity
-2. **Type-Based Token Identification**: Sui coins are identified by their full type name (e.g., `package::module::COIN`) rather than by their contract address
+2. **Type Names for Token Addresses**: Sui coins are identified by their full type name, using the format `package::module::SYMBOL` (example: `0x0b6345a938be0a9bcd8319ca6b768bfddfffd60f0178d920973a528ef741c639::test::TEST`), rather than by contract address
 3. **CoinManagement Struct**: Replaces token manager contracts
 4. **Object-Based Capabilities**: `TreasuryCap` objects replace role-based minter permissions
 5. **Chain-Aware Token IDs**: Token ID derivation includes a chain name hash
@@ -49,10 +49,10 @@ This ARC aims to:
 1. **Channel Identity**: Use `Channel` objects for deployer identity and authentication throughout the linking process
 2. **Type Safety**: Utilize Sui's generic type system (`<T>`) for compile-time token type validation
 3. **Token ID Derivation**: Include chain name hash in custom token ID calculation: `keccak256(prefix || chain_hash || deployer || salt)`
-4. **CoinManagement**: Implement token management logic within `CoinManagement` package supporting both `LOCK_UNLOCK` and `MINT_BURN` patterns
+4. **CoinManagement**: Implement token manager logic within the `CoinManagement` package supporting both `LOCK_UNLOCK` and `MINT_BURN` token management
 5. **Treasury Cap Management**: Support transfer and reclaim `TreasuryCap` workflow for `MINT_BURN` token managers
 6. **Message Format Compatibility**: Use ABI encoding compatible with EVM ITS implementations
-7. **Salt Format**: Enforce 32-byte salt format (0x + 64 hex characters) matching Sui address format
+7. **Salt Format**: Enforce 32-byte salt format matching Sui address format
 8. **Salt Uniqueness**: Prevent reuse of same salt with same deployer `Channel`
 
 ### Security Requirements
@@ -60,7 +60,7 @@ This ARC aims to:
 1. **Channel Ownership Validation**: Verify `Channel` ownership during linking to ensure deployer authentication
 2. **Token Manager Type Validation**: Prevent use of `NATIVE_INTERCHAIN_TOKEN` type for custom tokens
 3. **Same-Chain Prevention**: Block linking tokens to the source chain itself
-4. **Operator Authorization**: Validate `Channel`-based operator permissions for administrative operations
+4. **Operator & Distributor Authorization**: Validate `Channel`-based operator and distributor permissions for administrative operations
 5. **Treasury Cap Reclamation**: Enable original deployer to reclaim `TreasuryCap` if needed using `TreasuryCapReclaimer`
 6. **Flow Limit Enforcement**: Support flow limits with operator-only modification rights
 
@@ -70,7 +70,7 @@ This ARC aims to:
 
 [TODO: Diagram showing the complete Sui custom token linking flow from registration through linking and transfers]
 
-Sui custom token linking follows this workflow:
+Sui custom token linking uses the following workflow:
 
 ```
 1. User registers coin metadata on Sui via register_coin_metadata<T>
@@ -84,19 +84,19 @@ Sui custom token linking follows this workflow:
    → Claims tokenId for deployer Channel + salt
    → Returns TokenId and optional TreasuryCapReclaimer<T>
 
-4. User calls link_coin with destination token address
+4. User calls link_coin with the destination token address
    → Sends LINK_TOKEN message to ITS Hub
    → ITS Hub calculates scaling factor from stored decimals
    
 5. Destination chain receives LINK_TOKEN message
    → Deploys corresponding token manager
    
-6. ITS Hub processes InterchainTransfer messages with automatic decimal scaling
+6. ITS Hub now processes InterchainTransfer messages with automatic decimal scaling
 ```
 
 ### Channel-Based Identity Model
 
-Sui uses `Channel` objects for authenticating identities rather than transaction sender addresses. A `Channel` is a Sui object with a unique UID that represents identity (much like an address) across ITS operations:
+Sui uses `Channel` objects for authenticating rather than transaction sender addresses. A `Channel` is a Sui object with a unique UID that represents identity (much like an address) across ITS operations:
 
 ```move
 public struct Channel has key, store {
@@ -104,11 +104,19 @@ public struct Channel has key, store {
 }
 ```
 
-Since `Channel` is an object the can be owned by any user or contract, note that transferring a `Channel` object to another party transfers all of its capabilities and permissions including operatorship, distributorship, etc.
+Since `Channel` is an object the can be owned by any user or contract, transferring a `Channel` object to another party transfers all of its capabilities and permissions (including operatorship, and distributorship).
+
+For convenience, `Channel`s can be converted to an address format using the `to_address` helper function:
+
+```move
+public fun to_address(self: &Channel): address {
+    object::id_address(self)
+}
+```
 
 **Usage in Token Linking:**
 
-The same `Channel` must be used for both `register_custom_coin` and `link_coin` calls which proves the coin deployer's identity, since the token ID is derived from the `Channel`'s address.
+The same `Channel` must be used for both `register_custom_coin` and `link_coin` transactions. This proves the coin deployer's identity since the token ID is derived, in both cases, from the `Channel` and user provided `salt`, and the derived token ID must already exist (e.g. match the token ID from `register_custom_coin`) for token linking to succeed.
 
 ### CoinManagement: Sui's Token Manager
 
@@ -151,8 +159,8 @@ public fun new_locked<T>(): CoinManagement<T> {
 ```
 
 - Stores `Balance<T>` for holding locked tokens
-- No TreasuryCap needed
-- Tokens are locked by joining to balance, unlocked by splitting from balance
+- No `TreasuryCap` needed
+- Coins are locked by [joining](https://docs.sui.io/references/framework/sui_sui/coin#sui_coin_join) to balance, unlocked by [splitting](https://docs.sui.io/references/framework/sui_sui/coin#sui_coin_split) from balance
 
 **MINT_BURN Type:**
 ```move
@@ -229,7 +237,7 @@ Unlike EVM and other chains, Sui only supports two token manager types for custo
 
 #### LOCK_UNLOCK (`2`)
 
-Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. Use this manager type for coins that meet the following conditions:
+Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. Use this manager type for coins that meet the following criteria:
 - Existing tokens with established supply distribution
 - No minting authority available or desired
 - Simple integration without authority transfer
@@ -238,7 +246,7 @@ To use this manager type, create a `CoinManagement` using the `new_locked<T>()` 
 
 #### MINT_BURN (`4`)
 
-Tokens are burned on source chain and minted on destination chain. Use this manager type for coins that meet the following conditions:
+Tokens are burned on source chain and minted on destination chain. Use this manager type for coins that meet the following criteria:
 - Dynamic supply management desired
 - New tokens being deployed cross-chain
 - Lock/unlock liquidity insufficient
@@ -246,8 +254,7 @@ Tokens are burned on source chain and minted on destination chain. Use this mana
 To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(treasury_cap)` function.
 
 **`MINT_BURN` Requirements:**
-- Deployer must provide `TreasuryCap<T>` 
-- `TreasuryCap` must be transferred to ITS
+- Deployer must provide `TreasuryCap<T>` and transfer it to ITS
 - Returns `TreasuryCapReclaimer<T>` for reclaiming the `TreasuryCap`
 
 ### Complete Workflow Example
@@ -257,6 +264,7 @@ To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(t
 ## References
 
 - [ARC-1](./ARC-1.md)
+- [Sui `Coin` Module](https://docs.sui.io/references/framework/sui_sui/coin)
 - [Sui Interchain Token Service](https://github.com/axelarnetwork/axelar-cgp-sui)
 - [EVM Interchain Token Service](https://github.com/axelarnetwork/interchain-token-service)
 - [Sui Token Linking](#tbd)
@@ -266,4 +274,5 @@ To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(t
 
 |  Date  | Revision  | Author |  Description  |
 |--------|-----------|--------|---------------|
-| 2025-11-3 | v1.0 | Drew Taylor | Initial ARC specification for Sui custom token linking |
+| 2025-11-03 | v1.0 | Drew Taylor | Initial draft |
+| 2025-11-04 | v1.1 | Drew Taylor | Add address encoding, token linking diagrams |
