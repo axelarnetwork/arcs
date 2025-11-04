@@ -16,13 +16,11 @@ This ARC specifies the implementation of custom token linking for Sui in the Int
 
 ## Background and Motivation
 
-ITS supports two distinct token deployment approaches:
+ITS supports two distinct token linking approaches:
 
-**Native Interchain Tokens**: Tokens deployed directly by ITS using standardized contracts. They must have identical decimals across all chains, and linking uses a **deploy origin** → **deploy remote** workflow. Metadata registration is not required, since decimals are the same on both the origin and destination chains.
+**Native Interchain Tokens**: Tokens deployed directly by ITS using standardized contracts. They must have identical decimals across all chains, and linking uses a **deploy origin** → **deploy remote** workflow. Metadata registration is not required for linking, since decimals are the same on both the origin and destination chains.
 
-**Custom Tokens**: Tokens deployed independently that integrate with ITS through registration and linking. They support different decimal precisions across chains via ITS Hub's automatic scaling. Linking requires metadata registration on each chain, followed by registration in ITS, then explicit linking. Custom tokens cannot use the `NATIVE_INTERCHAIN_TOKEN` token manager type.
-
-The ability to link tokens with different decimals is crucial for integrating existing token ecosystems. For example, USDC has 6 decimals on some chains (e.g. Ethereum, Solana, etc.) but 18 on others (e.g. BNB Chain). When linking tokens with different decimal precisions, ITS Hub automatically scales the decimals ensuring correct token transfer amounts while preserving each chain's native precision.
+**Custom Tokens**: Tokens deployed independently that integrate with ITS. Linking supports different decimal precisions across chains via ITS Hub's automatic scaling. Linking requires metadata registration on each chain, followed by registration in ITS, then explicit linking. Custom tokens cannot use the `NATIVE_INTERCHAIN_TOKEN` token manager type.
 
 ### Motivation for Sui-Specific Token Linking ARC
 
