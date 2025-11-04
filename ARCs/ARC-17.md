@@ -187,11 +187,6 @@ writer
     .write_bytes(link_params);
 ```
 
-The conversion chain is:
-1. `TypeName` → `String` via `.into_string()`
-2. `String` → `vector<u8>` via `.into_bytes()`
-3. Bytes written to ABI-encoded payload
-
 #### Cross-Chain Encoding Differences
 
 **Key Differences:**
