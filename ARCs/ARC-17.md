@@ -68,8 +68,6 @@ This ARC aims to:
 
 ### Process Flow Overview
 
-[TODO: Diagram showing the complete Sui custom token linking flow from registration through linking and transfers]
-
 Sui custom token linking uses the following workflow:
 
 ```
@@ -257,16 +255,97 @@ To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(t
 - Deployer must provide `TreasuryCap<T>` and transfer it to ITS
 - Returns `TreasuryCapReclaimer<T>` for reclaiming the `TreasuryCap`
 
-### Complete Workflow Example
+### Complete Process Flow
 
-[TODO: Sequence diagram showing: User creates Channel → registers metadata on both chains → registers custom coin → links to destination → optional treasury cap transfer → cross-chain transfer flow]
+```mermaid
+sequenceDiagram
+    participant User
+    participant TreasuryCap as TreasuryCap<T>
+    participant Channel as Deployer Channel
+    participant SuiITS as Sui ITS
+    participant Hub as ITS Hub
+    participant DestITS as Destination ITS
+    participant DestToken as Destination Token
+    
+    %% Create Channel
+    Note over User,Channel: Step 1: Create Deployer Channel
+    User->>Channel: channel::new(ctx)
+    Note over Channel: Channel created with unique UID<br/>Serves as deployer identity
+    
+    %% Register Metadata - Sui
+    Note over User,Hub: Step 2: Register Sui Coin Metadata
+    User->>SuiITS: register_coin_metadata<T>(coin_metadata)
+    activate SuiITS
+    SuiITS->>SuiITS: Extract decimals from CoinMetadata
+    SuiITS->>SuiITS: Get type name from <T>
+    SuiITS->>Hub: MESSAGE_TYPE_REGISTER_TOKEN_METADATA<br/>(type_name, decimals)
+    deactivate SuiITS
+    activate Hub
+    Hub->>Hub: Store: type_name → decimals
+    deactivate Hub
+    
+    %% Register Metadata - Destination
+    Note over User,DestITS: Step 3: Register Destination Token Metadata
+    User->>DestITS: registerTokenMetadata(token_address, gasValue)
+    activate DestITS
+    DestITS->>DestITS: Read decimals from token contract
+    DestITS->>Hub: MESSAGE_TYPE_REGISTER_TOKEN_METADATA<br/>(token_address, decimals)
+    deactivate DestITS
+    activate Hub
+    Hub->>Hub: Store: token_address → decimals
+    deactivate Hub
+    
+    %% Register Custom Coin with MINT_BURN
+    Note over User,SuiITS: Step 4: Register Custom Coin (MINT_BURN)
+    User->>TreasuryCap: Provide TreasuryCap<T>
+    User->>User: coin_management = new_with_cap<T>(treasury_cap)
+    Note over User: CoinManagement created with:<br/>- treasury_cap: Some(TreasuryCap)<br/>- balance: None<br/>- Type: MINT_BURN
+    
+    User->>SuiITS: register_custom_coin<T>(<br/>deployer=Channel, salt,<br/>coin_metadata, coin_management, ctx)
+    activate SuiITS
+    SuiITS->>SuiITS: tokenId = keccak256(<br/>prefix ‖ chain_hash ‖<br/>deployer.address ‖ salt)
+    SuiITS->>SuiITS: Store CoinManagement<T> in Bag
+    Note over SuiITS: TreasuryCap now held by ITS
+    SuiITS->>SuiITS: Create TreasuryCapReclaimer<T>
+    SuiITS-->>User: Return (TokenId, Some(TreasuryCapReclaimer<T>))
+    deactivate SuiITS
+    Note over User: User receives TreasuryCapReclaimer<br/>for potential future reclamation
+    
+    %% Link to Destination (LOCK_UNLOCK)
+    Note over User,DestITS: Step 5: Link Coin (Destination LOCK_UNLOCK)
+    User->>SuiITS: link_coin(<br/>deployer=Channel, salt,<br/>dest_chain, dest_token_addr,<br/>LOCK_UNLOCK, link_params)
+    activate SuiITS
+    SuiITS->>SuiITS: Re-derive tokenId<br/>(validates deployer Channel)
+    SuiITS->>SuiITS: Retrieve source type name
+    SuiITS->>Hub: MESSAGE_TYPE_LINK_TOKEN<br/>(tokenId, LOCK_UNLOCK,<br/>source_type_name, dest_token_addr,<br/>link_params)
+    deactivate SuiITS
+    
+    activate Hub
+    Hub->>Hub: Read src decimals (from Sui)
+    Hub->>Hub: Read dest decimals (from destination)
+    Hub->>Hub: Calculate scaling factor:<br/>10^(dest_decimals - src_decimals)
+    Hub->>Hub: Create TokenInstance with scaling
+    Hub->>DestITS: MESSAGE_TYPE_LINK_TOKEN<br/>(tokenId, LOCK_UNLOCK,<br/>source_type_name, dest_token_addr,<br/>link_params)
+    deactivate Hub
+    
+    activate DestITS
+    DestITS->>DestITS: Deploy LOCK_UNLOCK Token Manager
+    DestITS->>DestITS: Add operator from link_params (if provided)
+    DestITS->>DestToken: Token Manager ready to lock/unlock
+    deactivate DestITS
+    
+    %% Ready State
+    rect rgb(200, 255, 200)
+        Note over SuiITS,DestITS: ✓ Linking Complete!<br/>Cross-chain transfers now enabled
+    end
+```
 
 ## References
 
 - [ARC-1](./ARC-1.md)
-- [Sui `Coin` Module](https://docs.sui.io/references/framework/sui_sui/coin)
 - [Sui Interchain Token Service](https://github.com/axelarnetwork/axelar-cgp-sui)
 - [EVM Interchain Token Service](https://github.com/axelarnetwork/interchain-token-service)
+- [Sui `Coin` Module](https://docs.sui.io/references/framework/sui_sui/coin)
 - [Sui Token Linking](#tbd)
 - [Sui Channels](#tbd)
 
