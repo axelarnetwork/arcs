@@ -222,7 +222,17 @@ public struct CoinManagement<phantom T> has store {
 
 #### CoinManagement Variants
 
-**LOCK_UNLOCK Type:**
+Unlike EVM and other chains, Sui only supports two token manager types for custom tokens (`LOCK_UNLOCK` and `MINT_BURN`).
+
+**LOCK_UNLOCK (`2u256`)**
+Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. 
+
+- Stores `Balance<T>` for holding locked tokens
+- No `TreasuryCap` needed
+- Coins are locked by [joining](https://docs.sui.io/references/framework/sui_sui/coin#sui_coin_join) to balance, unlocked by [splitting](https://docs.sui.io/references/framework/sui_sui/coin#sui_coin_split) from balance
+
+To use this manager type, create a `CoinManagement` using the `new_locked<T>()` function.
+
 ```move
 public fun new_locked<T>(): CoinManagement<T> {
     CoinManagement<T> {
@@ -236,11 +246,16 @@ public fun new_locked<T>(): CoinManagement<T> {
 }
 ```
 
-- Stores `Balance<T>` for holding locked tokens
-- No `TreasuryCap` needed
-- Coins are locked by [joining](https://docs.sui.io/references/framework/sui_sui/coin#sui_coin_join) to balance, unlocked by [splitting](https://docs.sui.io/references/framework/sui_sui/coin#sui_coin_split) from balance
+**MINT_BURN (`4u256`)**
 
-**MINT_BURN Type:**
+Tokens are burned on source chain and minted on destination chain.
+
+- Stores `TreasuryCap<T>` for minting/burning
+- No balance storage needed
+- Tokens are burned by decreasing supply, minted by increasing supply
+
+To use this manager type create a `CoinManagement` using the `new_with_cap<T>(treasury_cap)` function.
+
 ```move
 public fun new_with_cap<T>(treasury_cap: TreasuryCap<T>): CoinManagement<T> {
     CoinManagement<T> {
@@ -253,10 +268,6 @@ public fun new_with_cap<T>(treasury_cap: TreasuryCap<T>): CoinManagement<T> {
     }
 }
 ```
-
-- Stores `TreasuryCap<T>` for minting/burning
-- No balance storage needed
-- Tokens are burned by decreasing supply, minted by increasing supply
 
 #### `CoinManagement` Core Operations
 
@@ -308,18 +319,6 @@ public(package) fun set_flow_limit<T>(
 ```
 
 Only the assigned operator `Channel` can modify flow limits, providing security against unauthorized rate limit changes.
-
-### Supported Token Managers
-
-Unlike EVM and other chains, Sui only supports two token manager types for custom tokens:
-
-#### LOCK_UNLOCK (`2u256`)
-
-Tokens are locked on source chain and unlocked from pre-existing supply on destination chain. To use this manager type, create a `CoinManagement` using the `new_locked<T>()` function.
-
-#### MINT_BURN (`4u256`)
-
-Tokens are burned on source chain and minted on destination chain To use this manager type. create a `CoinManagement` using the `new_with_cap<T>(treasury_cap)` function.
 
 ### Complete Process Flow
 
