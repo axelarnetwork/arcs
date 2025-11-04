@@ -428,8 +428,8 @@ sequenceDiagram
 - [Sui Interchain Token Service](https://github.com/axelarnetwork/axelar-cgp-sui)
 - [EVM Interchain Token Service](https://github.com/axelarnetwork/interchain-token-service)
 - [Sui `Coin` Module](https://docs.sui.io/references/framework/sui_sui/coin)
-- [Sui Token Linking](#tbd)
-- [Sui Channels](#tbd)
+- [Sui Token Linking](https://github.com/axelarnetwork/axelar-contract-deployments/blob/98f13c6125c2af35d9c355c97ef414d9b98535a0/sui/docs/link-token.md)
+- [Sui Channels](https://github.com/axelarnetwork/axelar-contract-deployments/blob/3639ea1fdcda6c83aa6674465949111e9731d3cb/sui/docs/channel.md)
 
 ## Changelog
 
