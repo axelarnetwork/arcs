@@ -38,7 +38,7 @@ This ARC aims to:
 
 1. Specify Sui's custom token linking implementation within the ITS framework
 2. Clarify key differences from EVM token manager contracts
-4. Provide guidance for developers integrating Sui tokens with ITS
+3. Provide guidance for developers integrating Sui coins with ITS
 
 ## Requirements
 
