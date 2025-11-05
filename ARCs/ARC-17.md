@@ -112,7 +112,7 @@ public fun to_address(self: &Channel): address {
 
 **Usage in Token Linking:**
 
-The same `Channel` must be used for both `register_custom_coin` and `link_coin` transactions. This proves the coin deployer's identity since the token ID is derived, in both cases, from the `Channel` and user provided `salt`, and the derived token ID must already exist (e.g. match the token ID from `register_custom_coin`) for token linking to succeed.
+The same `Channel` must be used for both `register_custom_coin` and `link_coin` transactions. This proves the coin deployer's identity, since the token ID is derived, in both cases, from the `Channel` and the  `salt`. The derived token ID must already exist (e.g. match the token ID from `register_custom_coin`) for the token linking to succeed.
 
 ### Token Address Encoding
 
