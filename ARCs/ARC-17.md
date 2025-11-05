@@ -26,7 +26,7 @@ ITS supports two distinct token linking approaches:
 
 Sui's implementation differs fundamentally from EVM (and other) chains in several areas:
 
-1. **Channel-Based Identity**: Uses `Channel` objects instead of addresses for deployer identity
+1. **Channel-Based Identity**: Uses `Channel` objects instead of addresses for identity authorization
 2. **Type Names for Token Addresses**: Sui coins are identified by their full type name, using the format `package::module::SYMBOL` (example: `0b6345a938be0a9bcd8319ca6b768bfddfffd60f0178d920973a528ef741c639::test::TEST`)
 3. **CoinManagement Struct**: Replaces token manager contracts
 4. **Object-Based Capabilities**: `TreasuryCap` objects replace role-based minter permissions
