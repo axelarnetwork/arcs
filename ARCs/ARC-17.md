@@ -77,7 +77,7 @@ Sui custom token linking uses the following workflow:
 
 3. User calls register_custom_coin<T> on Sui
    → Creates CoinManagement<T> (token manager)
-   → Claims tokenId for deployer Channel + salt
+   → Claims TokenId for deployer Channel + salt
    → Returns TokenId and optional TreasuryCapReclaimer<T>
 
 4. User calls link_coin with the destination token address
