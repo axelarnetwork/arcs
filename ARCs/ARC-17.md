@@ -135,7 +135,7 @@ The Sui format consists of three components separated by `::`:
 2. **Module Name**: The Move module containing the coin definition
 3. **Type Name**: The coin's type identifier (typically the coin symbol)
 
-This type-based identification is intrinsic to Move's design—coins aren't separate contract instances but rather instances of a generic `Coin<T>` type where `T` is the specific coin type.
+This type-based identification is intrinsic to Move's design, where coins aren't separate contract instances but rather instances of a generic `Coin<T>` type where `T` is the specific coin type.
 
 #### The Role of `registered_coin_type`
 
