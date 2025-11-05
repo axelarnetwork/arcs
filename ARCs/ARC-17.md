@@ -100,7 +100,7 @@ public struct Channel has key, store {
 }
 ```
 
-Since `Channel` is an object the can be owned by any user or contract, transferring a `Channel` object to another party transfers all of its capabilities and permissions (including operatorship, and distributorship).
+Since a `Channel` is an object that can be owned by any user or contract, transferring a `Channel` object to another party transfers all of its capabilities and permissions (including operatorship, and distributorship).
 
 For convenience, `Channel`s can be converted to an address format using the `to_address` helper function:
 
