@@ -37,7 +37,7 @@ Sui's implementation differs fundamentally from EVM (and other) chains in severa
 This ARC aims to:
 
 1. Specify Sui's custom token linking implementation within the ITS framework
-3. Clarify key differences from EVM token manager contracts
+2. Clarify key differences from EVM token manager contracts
 4. Provide guidance for developers integrating Sui tokens with ITS
 
 ## Requirements
