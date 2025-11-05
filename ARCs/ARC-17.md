@@ -70,7 +70,7 @@ Sui custom token linking uses the following workflow:
 
 ```
 1. User registers coin metadata on Sui via register_coin_metadata<T>
-   → Sends token type name and decimals to ITS Hub
+   → Sends token type, name, and decimals to ITS Hub
    
 2. User registers coin metadata on destination chain
    → ITS Hub stores decimal mappings for both chains
