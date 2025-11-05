@@ -118,7 +118,7 @@ The same `Channel` must be used for both `register_custom_coin` and `link_coin` 
 
 #### Type Names vs Contract Addresses
 
-Sui identifies coins by their **full type name** rather than contract addresses. This fundamental difference stems from Move's type system, where each coin is defined as a generic type parameter `<T>` rather than a deployed contract instance.
+Sui identifies coins by their **full type name** rather than by contract address. This fundamental difference stems from Move's type system, where each coin is defined as a generic type parameter `<T>` rather than a deployed contract instance.
 
 **EVM Token Address Format:**
 ```
