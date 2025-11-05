@@ -201,7 +201,7 @@ writer
 In EVM, each token gets a separate `TokenManager` contract that handles locking/unlocking or minting/burning. Sui replaces this with the `CoinManagement` package—a generic structure stored within ITS that manages individual token operations.
 ```move
 public struct CoinManagement<phantom T> has store {
-    treasury_cap: Option<TreasuryCap<T>>,// For MINT_BURN
+    treasury_cap: Option<TreasuryCap<T>>, // For MINT_BURN
     balance: Option<Balance<T>>, // For LOCK_UNLOCK
     distributor: Option<address>, // Minting/burning authority
     operator: Option<address>, // Administrative authority
