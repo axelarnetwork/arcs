@@ -85,7 +85,7 @@ Introduce a **dedicated `chain-codec` contract** to encapsulate the chain-specif
 ### Chain-Codec Responsibilities
 
 1. **Payload Transformation**:
-    - provides `digest` for the multisig-prover's `ConstructProof` message. This is implemented as an ExecuteMsg to allow the contract to persist additional state if needed (like e.g. the XRPL integration described above).
+    - provides `digest` for the multisig-prover's `ConstructProof` message. This is implemented as the `PayloadDigest` query.
     - provides `execute_data` for the multisig-prover's `Proof` query (via `QueryMsg`).
 
 2. **Address Validation**:
@@ -95,7 +95,8 @@ Note that the `MessageIdFormat` is not part of the new `chain-codec` interface, 
 
 ### Changes to Existing Contracts
 
-To support integrations like the XRPL integration, the multisig-prover contract will be updated to include a `payload: HexBinary` field in the `ConstructProof` message when compiled with a new `receive-payload` feature flag. This allows the relayer to pass the encoded payload bytes directly to the multisig-prover contract, which will then forward it to the `chain-codec` contract. This is required by some integrations, such as XRPL.
+To support integrations like the XRPL integration, the multisig-prover contract will be updated to include a `payload: HexBinary` field in the `ConstructProof` message when compiled with a new `receive-payload` feature flag. This allows the relayer to pass the encoded payload bytes directly to the multisig-prover contract, which will then forward it to the `chain-codec` contract.
+Also, since the XRPL integration needs to write state during the proof construction, the `chain-codec` contract will provide a `NotifySigningSession` execute message that is called after the signing session was started. This message gets the full information about the signing session, like the session ID, verifier set and the payload.
 
 The `multisig-prover` and `voting-verifier` contracts will be updated to query / call the `chain-codec` contract for the necessary transformations and validations instead of implementing them directly. This includes adding the `chain-codec` contract address to their `InstantiateMsg` and config.
 
@@ -109,7 +110,7 @@ The [one-click deployment (ARC-8)](./ARC-8.md) in the `coordinator` will be upda
 
 To make implementing `chain-codec` contracts easier, a new `chain-codec-api` crate will be introduced. This crate will define the interface for the `chain-codec` contracts, including the `QueryMsg` and `ExecuteMsg` enums, providing documentation on how to implement them.
 
-It will also feature a `receive-payload` feature flag, analogous to the multisig-prover contract, which enables digest calculation to receive the payload bytes passed into the `ConstructProof` message.
+It will also feature a `receive-payload` feature flag, analogous to the multisig-prover contract, which enables digest calculation and the execute message to receive the payload bytes passed into the `ConstructProof` message.
 
 The interface will look like this:
 
@@ -127,21 +128,38 @@ pub enum QueryMsg {
     #[returns(Empty)]
     ValidateAddress {
         address: Address,
-    }
-}
-
-pub enum ExecuteMsg {
-    /// This should return a digest for identifying the payload in the `Response::data`. This is what gets signed by the verifiers.
+    },
+    /// This query returns a digest for identifying the payload. This is what gets signed by the verifiers.
     /// It's called by the multisig-prover contract during proof construction.
-    /// You can save additional information to the contract state if needed.
+    #[returns(HexBinary)]
     PayloadDigest {
         verifier_set: VerifierSet,
         payload: Payload,
         /// This field is only available if the multisig-prover contract was compiled with the `receive-payload` feature flag.
         /// Therefore, it is also feature-gated in this crate.
+        /// This is only filled if the digest is for proof construction. For a verifier set update, it is empty.
         /// Please note that you should validate this in some way.
         #[cfg(feature = "receive-payload")]
-        payload_bytes: HexBinary,
+        payload_bytes: Vec<HexBinary>,
+    },
+}
+
+pub enum ExecuteMsg {
+    /// This message is called by the multisig-prover contract after a multisig session is started.
+    /// It provides session information that the chain codec contract can store and use later.
+    /// The contract can also still revert the transaction here by returning an error or panicking.
+    ///
+    /// This can only be called by the multisig-prover contract.
+    #[permission(Specific(multisig_prover))]
+    NotifySigningSession {
+        multisig_session_id: Uint64,
+        verifier_set: VerifierSet,
+        payload: Payload,
+        /// This field is only available if the multisig-prover contract was compiled with the `receive-payload` feature flag.
+        /// Therefore, it is also feature-gated in this crate.
+        /// This is only filled if the session is for proof construction. For a verifier set update, it is empty.
+        #[cfg(feature = "receive-payload")]
+        payload_bytes: Vec<HexBinary>,
     },
 }
 ```
@@ -177,3 +195,4 @@ Chronological log of changes to this ARC.
 | 2025-07-15 | v1.0 | Christoph Otter | Initial draft |
 | 2025-07-23 | v1.1 | Christoph Otter | Change API to support more chains |
 | 2025-07-25 | v1.2 | Christoph Otter | Restructure ARC for better readability |
+| 2025-08-20 | v1.3 | Christoph Otter | Change digest back into query and add separate exec msg |
